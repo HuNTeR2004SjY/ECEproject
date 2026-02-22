@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECE Ticketing System</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <!-- Top Navbar -->
+        <header class="navbar">
+            <div class="navbar-left">
+                <div class="logo-icon">🎫</div>
+                <h2>ECE Agent</h2>
+
+                <nav class="navbar-nav">
+                    <button class="nav-item active" data-view="dashboard-view">Dashboard</button>
+                    <button class="nav-item" data-view="history-view">History</button>
+                    <button class="nav-item" data-view="settings-view">Settings</button>
+                </nav>
+            </div>
+
+            <div class="navbar-right">
+                <button class="nav-item cta-button" data-view="ticket-form-view">
+                    <span>➕ Submit Ticket</span>
+                </button>
+                <div class="user-profile">
+                    <div class="user-avatar">AD</div>
+                </div>
+                <!-- Logout Button -->
+                <a href="/logout" class="nav-item cta-button"
+                    style="background: #dc3545; text-decoration: none; margin-left: 10px;">Logout</a>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="dashboard-main">
+            <!-- Top Bar removed as it's merged into navbar -->
+
+            <!-- Dashboard View -->
+            <div id="dashboard-view" class="view-section active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon icon-blue">📨</div>
+                        <div class="stat-info">
+                            <h3>Total Tickets</h3>
+                            <p class="stat-value" id="statTotalTickets">--</p>
+                            <span class="stat-change positive" id="statWeekChange">Loading...</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon icon-green">✅</div>
+                        <div class="stat-info">
+                            <h3>Resolved Today</h3>
+                            <p class="stat-value" id="statResolvedToday">--</p>
+                            <span class="stat-change positive">Today</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon icon-purple">🤖</div>
+                        <div class="stat-info">
+                            <h3>AI Success Rate</h3>
+                            <p class="stat-value" id="statAiRate">--%</p>
+                            <span class="stat-change">Accuracy Rate</span>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon icon-orange">⚡</div>
+                        <div class="stat-info">
+                            <h3>Avg. Response</h3>
+                            <p class="stat-value" id="statAvgResponse">--s</p>
+                            <span class="stat-change positive">Response Time</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="recent-activity">
+                    <h2>Recent Activity</h2>
+                    <table class="activity-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Subject</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if tickets %}
+                            {% for ticket in tickets %}
+                            <tr onclick="openTicketDetails('{{ ticket.id }}')"
+                                style="cursor: pointer; transition: background 0.2s;">
+                                <td style="font-weight: 500;">#{{ ticket.id }}</td>
+                                <td style="color: var(--text-primary);">{{ ticket.subject }}</td>
+                                <td><span class="badge badge-{{ ticket.pred_type|lower }}">{{ ticket.pred_type }}</span>
+                                </td>
+                                <td>
+                                    {% if ticket.corrected %}
+                                    <span class="status-resolved"
+                                        style="background: rgba(52, 211, 153, 0.15); color: var(--success); padding: 4px 8px; border-radius: 4px;">Resolved</span>
+                                    {% else %}
+                                    <span class="status-pending"
+                                        style="background: rgba(251, 191, 36, 0.15); color: var(--warning); padding: 4px 8px; border-radius: 4px;">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td style="color: var(--text-muted); font-size: 0.9em;">{{ ticket.timestamp }}</td>
+                            </tr>
+                            {% endfor %}
+                            {% else %}
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 2rem;">No
+                                    recent activity.</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Submit Ticket View (Original Content) -->
+            <div id="ticket-form-view" class="view-section" style="display: none;">
+                <!-- Ticket Form -->
+                <section class="ticket-form-section">
+                    <div class="section-header">
+                        <h2>📝 New Support Ticket</h2>
+                        <p>Enter the ticket details below. Our AI will classify it and attempt to solve it instantly.
+                        </p>
+                    </div>
+
+                    <form id="ticketForm" class="ticket-form">
+                        <div class="form-group">
+                            <label for="subject">Subject</label>
+                            <input type="text" id="subject" name="subject"
+                                placeholder="e.g., Cannot login to my account" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="body">Description</label>
+                            <textarea id="body" name="body" rows="6" placeholder="Describe your issue in detail..."
+                                required></textarea>
+                        </div>
+
+                        <button type="submit" class="submit-btn" id="submitBtn">
+                            <span class="btn-text">🚀 Analyze & Solve</span>
+                            <span class="btn-loading" style="display: none;">
+                                <div class="spinner"></div>
+                                Processing...
+                            </span>
+                        </button>
+                    </form>
+                </section>
+
+                <!-- Results Section -->
+                <section class="results-section" id="results" style="display: none;">
+                    <div class="section-header">
+                        <h2>🎯 Classification Results</h2>
+                        <p>AI-generated predictions for your ticket</p>
+                    </div>
+
+                    <!-- Solution Section -->
+                    <div class="solution-section" id="solutionSection">
+                        <div class="solution-card">
+                            <div class="card-header">
+                                <span class="card-icon">💡</span>
+                                <span class="card-title">Recommended Solution</span>
+                                <span class="solution-badge" id="solutionMethod">Generated</span>
+                            </div>
+                            <div class="solution-content">
+                                <p id="solutionText">Loading solution...</p>
+                            </div>
+                            <div class="solution-footer">
+                                <span class="confidence-label">Confidence: <span
+                                        id="solutionConfidence">0%</span></span>
+                                <span class="confidence-label">Attempts: <span id="solutionAttempts">1</span></span>
+                                <button class="copy-btn" onclick="copySolution()">Copy to Clipboard</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="results-grid">
+                        <!-- Type Card -->
+                        <div class="result-card type-card">
+                            <div class="card-header">
+                                <span class="card-icon">📋</span>
+                                <span class="card-title">Type</span>
+                            </div>
+                            <div class="card-value" id="typeValue">-</div>
+                            <div class="card-confidence">
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" id="typeConfidence"></div>
+                                </div>
+                                <span class="confidence-text" id="typeConfText">0%</span>
+                            </div>
+                        </div>
+
+                        <!-- Priority Card -->
+                        <div class="result-card priority-card">
+                            <div class="card-header">
+                                <span class="card-icon">⚡</span>
+                                <span class="card-title">Priority</span>
+                            </div>
+                            <div class="card-value" id="priorityValue">-</div>
+                            <div class="card-confidence">
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" id="priorityConfidence"></div>
+                                </div>
+                                <span class="confidence-text" id="priorityConfText">0%</span>
+                            </div>
+                        </div>
+
+                        <!-- Queue Card -->
+                        <div class="result-card queue-card">
+                            <div class="card-header">
+                                <span class="card-icon">📂</span>
+                                <span class="card-title">Assigned Queue</span>
+                            </div>
+                            <div class="card-value" id="queueValue">-</div>
+                            <div class="card-confidence">
+                                <div class="confidence-bar">
+                                    <div class="confidence-fill" id="queueConfidence"></div>
+                                </div>
+                                <span class="confidence-text" id="queueConfText">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tags Section -->
+                    <div class="tags-section">
+                        <div class="tags-header">
+                            <span class="card-icon">🏷️</span>
+                            <span>Suggested Tags</span>
+                        </div>
+                        <div class="tags-container" id="tagsContainer">
+                            <!-- Tags will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Submit Another Button -->
+                    <div class="submit-another-section">
+                        <button type="button" class="submit-another-btn" id="submitAnotherBtn">
+                            ➕ Submit Another Ticket
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- History View -->
+            <div id="history-view" class="view-section" style="display: none;">
+                <div class="recent-activity">
+                    <h2>🕓 Ticket History</h2>
+                    <p class="history-subtitle">Your recent tickets</p>
+                    <table class="activity-table" id="historyTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Subject</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            {% if tickets %}
+                            {% for ticket in tickets %}
+                            <tr>
+                                <td>#{{ ticket.id }}</td>
+                                <td>{{ ticket.subject }}</td>
+                                <td><span class="badge badge-{{ ticket.pred_type|lower }}">{{ ticket.pred_type }}</span>
+                                </td>
+                                <td>
+                                    {% if ticket.corrected %}
+                                    <span class="status-resolved">Resolved</span>
+                                    {% else %}
+                                    <span class="status-pending">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ ticket.timestamp }}</td>
+                            </tr>
+                            {% endfor %}
+                            {% else %}
+                            <tr>
+                                <td colspan="5" style="text-align: center;">No tickets submitted yet.</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Settings View (Placeholder) -->
+            <div id="settings-view" class="view-section" style="display: none;">
+                <div class="placeholder-content">
+                    <h2>System Settings</h2>
+                    <p>Model Configuration & Preferences</p>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Ticket Status Modal -->
+    <div id="ticketStatusModal" class="modal"
+        style="display: none; align-items: center; justify-content: center; background: rgba(255,255,255,0.4); backdrop-filter: blur(5px);">
+        <div class="modal-content ticket-details-modal"
+            style="background: var(--bg-card); border: 1px solid var(--border); box-shadow: var(--shadow-xl); border-radius: var(--radius-lg); overflow: hidden; max-width: 600px; width: 90%;">
+            <div class="modal-header"
+                style="background: rgba(0,0,0,0.03); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="font-size: 1.25rem; font-weight: 600;">🎫 Ticket Details</h2>
+                <span class="close-modal"
+                    style="font-size: 1.5rem; cursor: pointer; color: var(--text-secondary);">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="ticket-info-summary">
+                    <div class="info-row">
+                        <span class="info-label">ID:</span> <span id="modalTicketId" class="info-value">--</span>
+                        <span class="info-label ml-2">Status:</span> <span id="modalStatus"
+                            class="status-badge">--</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Subject:</span> <span id="modalSubject"
+                            class="info-value subject-text">--</span>
+                    </div>
+                </div>
+
+                <div class="chat-interface">
+                    <div class="chat-messages" id="chatMessages">
+                        <!-- Chat bubbles will appear here -->
+                        <div class="logger-loading">Loading conversation...</div>
+                    </div>
+
+                    <div class="chat-input-area" id="chatInputArea">
+                        <textarea id="chatInput" placeholder="Type your response or additional details here..."
+                            rows="2"></textarea>
+                        <button id="sendReplyBtn" class="send-btn">
+                            <span>Send</span> ✈️
+                        </button>
+                    </div>
+                    <div id="chatLoading" style="display: none; color: #666; font-style: italic; margin-top: 5px;">
+                        AI is thinking...
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer"
+                style="padding: 16px; border-top: 1px solid rgba(0,0,0,0.05); display: flex; justify-content: flex-end;">
+                <button id="resolveTicketBtn" class="btn-primary" style="background: var(--gradient-success, #10b981);">
+                    ✅ Mark as Resolved
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.SERVER_TICKETS = {{ tickets | tojson | safe }};
+    </script>
+    <script src="/static/script.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - ECE Agent</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .view-section {
+            display: none;
+        }
+
+        .view-section.active {
+            display: block;
+        }
+
+        .nav-item {
+            cursor: pointer;
+        }
+
+        .nav-item.active {
+            background: rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="dashboard-container">
+        <!-- Top Navbar -->
+        <header class="navbar">
+            <div class="navbar-left">
+                <div class="logo-icon">🛡️</div>
+                <h2>ECE Admin</h2>
+                <nav class="navbar-nav">
+                    <button class="nav-item active" onclick="switchView('overview')">Overview</button>
+                    <button class="nav-item" onclick="switchView('history')">History</button>
+                    <button class="nav-item" onclick="switchView('users')">Users</button>
+                    <button class="nav-item" onclick="switchView('settings')">Settings</button>
+                </nav>
+            </div>
+            <div class="navbar-right">
+                <div class="user-profile">
+                    <span>{{ user.username }} ({{ user.role }})</span>
+                    <div class="user-avatar">AD</div>
+                </div>
+                <a href="/logout" class="nav-item cta-button"
+                    style="background: var(--gradient-danger); text-decoration: none;">Logout</a>
+            </div>
+        </header>
+
+        <main class="dashboard-main">
+
+            <!-- OVERVIEW SECTION -->
+            <div id="overview" class="view-section active">
+                <div class="section-header">
+                    <h2>Company Overview</h2>
+                    <p>Manage tickets and support for your organization.</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon icon-blue">📊</div>
+                        <div class="stat-info">
+                            <h3>Total Tickets</h3>
+                            <p class="stat-value">{{ stats.total }}</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon icon-green">✅</div>
+                        <div class="stat-info">
+                            <h3>Active</h3>
+                            <p class="stat-value">{{ stats.active }}</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon icon-orange">⚠️</div>
+                        <div class="stat-info">
+                            <h3>Escalated</h3>
+                            <p class="stat-value">{{ stats.escalated }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="recent-activity">
+                    <h2>Recent Tickets</h2>
+                    <table class="activity-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Subject</th>
+                                <th>Predicted Type</th>
+                                <th>Priority</th>
+                                <th>Raised By</th>
+                                <th>Status</th>
+                                <th>Time</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if tickets %}
+                            {% for ticket in tickets[:10] %}
+                            <tr style="transition: background 0.2s;">
+                                <td style="font-weight: 500;">#{{ ticket.id }}</td>
+                                <td style="color: var(--text-primary);">{{ ticket.subject }}</td>
+                                <td><span class="badge badge-{{ ticket.pred_type|lower }}">{{ ticket.pred_type }}</span>
+                                </td>
+                                <td><span class="badge badge-{{ ticket.pred_priority|lower }}">{{ ticket.pred_priority
+                                        }}</span></td>
+                                <td>{{ ticket.raised_by }}</td>
+                                <td>
+                                    {% if ticket.corrected %}
+                                    <span class="status-resolved"
+                                        style="background: rgba(52, 211, 153, 0.15); color: var(--success); padding: 4px 8px; border-radius: 4px;">Resolved</span>
+                                    {% else %}
+                                    <span class="status-pending"
+                                        style="background: rgba(251, 191, 36, 0.15); color: var(--warning); padding: 4px 8px; border-radius: 4px;">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td style="color: var(--text-muted); font-size: 0.9em;">{{ ticket.timestamp }}</td>
+                                <td>
+                                    <button class="nav-item"
+                                        style="font-size: 0.8rem; padding: 4px 8px; border: 1px solid var(--border); background: var(--bg-card);"
+                                        onclick='viewTicket({{ ticket|tojson }})'>View</button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            {% else %}
+                            <tr>
+                                <td colspan="8" style="text-align: center; padding: 20px;">No tickets found.</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- HISTORY SECTION -->
+            <div id="history" class="view-section">
+                <div class="section-header">
+                    <h2>Ticket History</h2>
+                    <p>All past tickets and resolutions.</p>
+                </div>
+                <div class="recent-activity">
+                    <table class="activity-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Subject</th>
+                                <th>Type</th>
+                                <th>Priority</th>
+                                <th>User</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ticket in tickets %}
+                            <tr style="transition: background 0.2s;">
+                                <td style="font-weight: 500;">#{{ ticket.id }}</td>
+                                <td style="color: var(--text-primary);">{{ ticket.subject }}</td>
+                                <td><span class="badge badge-{{ ticket.pred_type|lower }}">{{ ticket.pred_type }}</span>
+                                </td>
+                                <td><span class="badge badge-{{ ticket.pred_priority|lower }}">{{ ticket.pred_priority
+                                        }}</span></td>
+                                <td>{{ ticket.raised_by }}</td>
+                                <td>
+                                    {% if ticket.corrected %}
+                                    <span class="status-resolved"
+                                        style="background: rgba(52, 211, 153, 0.15); color: var(--success); padding: 4px 8px; border-radius: 4px;">Resolved</span>
+                                    {% else %}
+                                    <span class="status-pending"
+                                        style="background: rgba(251, 191, 36, 0.15); color: var(--warning); padding: 4px 8px; border-radius: 4px;">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td style="color: var(--text-muted); font-size: 0.9em;">{{ ticket.timestamp }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- USERS SECTION -->
+            <div id="users" class="view-section">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2>User Management</h2>
+                        <p>Manage employee accounts.</p>
+                    </div>
+                    <button class="cta-button" onclick="openUserModal()">+ Add User</button>
+                </div>
+                <div class="recent-activity">
+                    <table class="activity-table" id="usersTable">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <!-- Loaded via API -->
+                            <tr>
+                                <td colspan="3">Loading users...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SETTINGS SECTION -->
+            <div id="settings" class="view-section">
+                <div class="section-header">
+                    <h2>Department Settings</h2>
+                    <p>Configure department emails for automated routing.</p>
+                </div>
+
+                <div class="recent-activity">
+                    <div style="margin-bottom: 20px;">
+                        <h3>Add Department</h3>
+                        <form id="addDeptForm" style="display: flex; gap: 10px; align-items: flex-end;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Department Name</label>
+                                <input type="text" id="deptName" placeholder="e.g. Legal" required>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Email Address</label>
+                                <input type="email" id="deptEmail" placeholder="legal@company.com" required>
+                            </div>
+                            <button type="submit" class="cta-button">Add</button>
+                        </form>
+                    </div>
+
+                    <h3>Existing Departments</h3>
+                    <table class="activity-table" id="deptTable">
+                        <thead>
+                            <tr>
+                                <th>Department</th>
+                                <th>Email</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deptTableBody">
+                            <!-- Loaded via API -->
+                            <tr>
+                                <td colspan="3">Loading departments...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Ticket Details Modal (Existing) -->
+        <div id="ticketDetailsModal" class="modal"
+            style="display: none; align-items: center; justify-content: center; background: rgba(255,255,255,0.4); backdrop-filter: blur(5px);">
+            <div class="modal-content"
+                style="background: var(--bg-card); border: 1px solid var(--border); box-shadow: var(--shadow-xl); border-radius: var(--radius-lg); overflow: hidden; max-width: 600px; width: 90%;">
+                <div class="modal-header"
+                    style="background: rgba(0,0,0,0.03); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="font-size: 1.25rem; font-weight: 600;">🎫 Ticket Details</h2>
+                    <span class="close-modal"
+                        style="font-size: 1.5rem; cursor: pointer; color: var(--text-secondary);">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="ticket-summary">
+                        <div class="summary-item">
+                            <span class="label">ID:</span>
+                            <span class="value" id="detailId">--</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="label">Subject:</span>
+                            <span class="value" id="detailSubject">--</span>
+                        </div>
+                    </div>
+                    <div class="ticket-solution">
+                        <h3>Description</h3>
+                        <p id="detailBody"
+                            style="background: rgba(0,0,0,0.04); padding: 10px; border-radius: 4px;">--</p>
+                    </div>
+                    <div class="ticket-solution" style="margin-top: 20px;">
+                        <h3>AI Classification</h3>
+                        <div class="summary-item">
+                            <span class="label">Type:</span>
+                            <span class="value" id="detailType">--</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="label">Priority:</span>
+                            <span class="value" id="detailPriority">--</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-secondary close-modal-btn">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add User Modal (New) -->
+        <div id="addUserModal" class="modal"
+            style="display: none; align-items: center; justify-content: center; background: rgba(255,255,255,0.4); backdrop-filter: blur(5px);">
+            <div class="modal-content"
+                style="background: var(--bg-card); border: 1px solid var(--border); box-shadow: var(--shadow-xl); border-radius: var(--radius-lg); overflow: hidden; max-width: 450px; width: 90%;">
+                <div class="modal-header"
+                    style="background: rgba(0,0,0,0.03); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="font-size: 1.25rem; font-weight: 600;">👤 Create New User</h2>
+                    <span class="close-modal"
+                        style="font-size: 1.5rem; cursor: pointer; color: var(--text-secondary);">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <form id="createUserForm">
+                        <div class="form-group">
+                            <label>Username</label>
+                            <input type="text" id="newUsername" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="newEmail" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Password</label>
+                            <input type="password" id="newPassword" required>
+                        </div>
+                        <button type="submit" class="cta-button" style="width: 100%; margin-top: 15px;">Create
+                            User</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // --- View Switching ---
+            function switchView(viewId) {
+                document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+                document.getElementById(viewId).classList.add('active');
+
+                document.querySelectorAll('.navbar-nav .nav-item').forEach(el => el.classList.remove('active'));
+                event.target.classList.add('active');
+
+                if (viewId === 'users') loadUsers();
+                if (viewId === 'settings') loadDepartments();
+            }
+
+            // --- Users API ---
+            async function loadUsers() {
+                const tbody = document.getElementById('usersTableBody');
+                try {
+                    const res = await fetch('/api/admin/users');
+                    const data = await res.json();
+                    tbody.innerHTML = data.users.map(u => `
+                        <tr>
+                            <td>${u.username}</td>
+                            <td>${u.email}</td>
+                            <td>${u.role}</td>
+                            <td>
+                                ${u.role !== 'admin' ?
+                            `<button onclick="deleteUser(${u.id})" class="cta-button danger" style="padding: 4px 12px; font-size: 0.8rem;">Delete</button>` :
+                            ''}
+                            </td>
+                        </tr>
+                    `).join('');
+                } catch (e) {
+                    tbody.innerHTML = '<tr><td colspan="3">Error loading users</td></tr>';
+                }
+            }
+
+            function openUserModal() {
+                document.getElementById('addUserModal').style.display = 'flex';
+            }
+
+            document.getElementById('createUserForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const btn = e.target.querySelector('button');
+                btn.disabled = true;
+
+                try {
+                    const res = await fetch('/api/admin/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username: document.getElementById('newUsername').value,
+                            email: document.getElementById('newEmail').value,
+                            password: document.getElementById('newPassword').value
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('User created!');
+                        document.getElementById('addUserModal').style.display = 'none';
+                        loadUsers();
+                        e.target.reset();
+                    } else {
+                        alert(data.error);
+                    }
+                } catch (e) {
+                    alert('Error creating user');
+                }
+                btn.disabled = false;
+            };
+
+            async function deleteUser(id) {
+                if (!confirm('Are you sure you want to delete this user?')) return;
+                try {
+                    const res = await fetch(`/api/admin/users?id=${id}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.success) {
+                        loadUsers();
+                    } else {
+                        alert(data.error);
+                    }
+                } catch (e) {
+                    alert('Error deleting user');
+                }
+            }
+
+            // --- Departments API ---
+            async function loadDepartments() {
+                const tbody = document.getElementById('deptTableBody');
+                try {
+                    const res = await fetch('/api/admin/departments');
+                    const data = await res.json();
+                    tbody.innerHTML = data.departments.map(d => `
+                        <tr>
+                            <td>${d.name}</td>
+                            <td>${d.email}</td>
+                            <td><button onclick="deleteDept(${d.id})" class="cta-button danger" style="padding: 4px 12px; font-size: 0.8rem;">Delete</button></td>
+                        </tr>
+                    `).join('');
+                } catch (e) {
+                    tbody.innerHTML = '<tr><td colspan="3">Error loading departments</td></tr>';
+                }
+            }
+
+            async function deleteDept(id) {
+                if (!confirm('Are you sure?')) return;
+                try {
+                    await fetch(`/api/admin/departments?id=${id}`, { method: 'DELETE' });
+                    loadDepartments();
+                } catch (e) { alert('Error deleting department'); }
+            }
+
+            document.getElementById('addDeptForm').onsubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/api/admin/departments', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: document.getElementById('deptName').value,
+                            email: document.getElementById('deptEmail').value
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        loadDepartments();
+                        e.target.reset();
+                    } else {
+                        alert(data.error);
+                    }
+                } catch (e) { alert('Error adding department'); }
+            };
+
+            // --- Modal Logic ---
+            document.addEventListener('DOMContentLoaded', function () {
+                const modals = document.querySelectorAll('.modal');
+                const closeBtns = document.querySelectorAll('.close-modal, .close-modal-btn');
+
+                const closeModal = () => {
+                    modals.forEach(m => m.style.display = 'none');
+                };
+
+                closeBtns.forEach(btn => btn.onclick = closeModal);
+                window.onclick = (e) => {
+                    if (e.target.classList.contains('modal')) closeModal();
+                };
+
+                window.viewTicket = function (ticket) {
+                    const modal = document.getElementById('ticketDetailsModal');
+                    document.getElementById('detailId').textContent = '#' + ticket.id;
+                    document.getElementById('detailSubject').textContent = ticket.subject;
+                    document.getElementById('detailBody').textContent = ticket.body || 'No description provided.';
+                    document.getElementById('detailType').textContent = ticket.pred_type;
+                    document.getElementById('detailPriority').textContent = ticket.pred_priority;
+                    modal.style.display = 'flex';
+                };
+            });
+        </script>
+</body>
+
+</html>

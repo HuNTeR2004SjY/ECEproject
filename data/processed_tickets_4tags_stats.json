@@ -1,0 +1,51 @@
+{
+  "original_count": 28261,
+  "final_count": 23740,
+  "removed_duplicates": 4512,
+  "removed_invalid": 9,
+  "tag_distribution": {
+    "Tech Support": 10979,
+    "IT": 10749,
+    "Performance": 9160,
+    "Feedback": 6714,
+    "Documentation": 6059,
+    "Bug": 6030,
+    "Security": 5545,
+    "Feature": 3677,
+    "Technical": 3435,
+    "Disruption": 3424,
+    "Outage": 2324,
+    "Product": 1941,
+    "Sales": 1731,
+    "Resolution": 1584,
+    "Guidance": 1449,
+    "Network": 1440,
+    "Billing": 1342,
+    "Integration": 952,
+    "Marketing": 883,
+    "Payment": 843
+  },
+  "queue_distribution": {
+    "Technical Support": 6856,
+    "Product Support": 4426,
+    "Customer Service": 3570,
+    "IT Support": 2833,
+    "Billing and Payments": 2418,
+    "Returns and Exchanges": 1173,
+    "Service Outages and Maintenance": 937,
+    "Sales and Pre-Sales": 724,
+    "Human Resources": 461,
+    "General Inquiry": 342
+  },
+  "type_distribution": {
+    "Incident": 9433,
+    "Request": 6879,
+    "Problem": 4925,
+    "Change": 2503
+  },
+  "priority_distribution": {
+    "Medium": 9748,
+    "High": 9147,
+    "Low": 4845
+  }
+}

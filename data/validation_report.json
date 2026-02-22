@@ -1,0 +1,126 @@
+{
+  "ticket_id": "TEST-123",
+  "validation_status": "ValidationStatus.APPROVED",
+  "overall_score": 81.9,
+  "passed_checks": 10,
+  "failed_checks": 0,
+  "warning_checks": 0,
+  "checks": [
+    {
+      "check_name": "Solution Length",
+      "category": "Format",
+      "passed": true,
+      "score": 1.0,
+      "message": "Appropriate length (486 chars)",
+      "severity": "FeedbackSeverity.SUGGESTION",
+      "details": {},
+      "correction_prompt": null
+    },
+    {
+      "check_name": "Solution Structure",
+      "category": "Format",
+      "passed": true,
+      "score": 1.0,
+      "message": "Solution is well-structured with clear steps",
+      "severity": "FeedbackSeverity.SUGGESTION",
+      "details": {},
+      "correction_prompt": null
+    },
+    {
+      "check_name": "Solution Relevance",
+      "category": "Relevance",
+      "passed": true,
+      "score": 0.576,
+      "message": "Solution relevance could be improved (58%)",
+      "severity": "FeedbackSeverity.WARNING",
+      "details": {
+        "missing_keywords": [
+          "cannot",
+          "mobile",
+          "device",
+          "unable",
+          "keeps"
+        ],
+        "suggestion": "Use synonyms and related terms that show you understand the issue"
+      },
+      "correction_prompt": "Your solution addresses 'cannot access email on mobile device' but could be more focused. Ensure you specifically mention: cannot, access, email or related terms. Make the connection to the customer's issue clearer."
+    },
+    {
+      "check_name": "Solution Completeness",
+      "category": "Completeness",
+      "passed": true,
+      "score": 0.7,
+      "message": "Solution is complete (70%)",
+      "severity": "FeedbackSeverity.SUGGESTION",
+      "details": {},
+      "correction_prompt": null
+    },
+    {
+      "check_name": "Solution Clarity",
+      "category": "Clarity",
+      "passed": true,
+      "score": 1.0,
+      "message": "Solution is clear and readable",
+      "severity": "FeedbackSeverity.SUGGESTION",
+      "details": {},
+      "correction_prompt": null
+    },
+    {
+      "check_name": "Solution Actionability",
+      "category": "Actionability",
+      "passed": true,
+      "score": 1.0,
+      "message": "Solution provides clear actions (8 action verbs found)",
+      "severity": "FeedbackSeverity.SUGGESTION",
+      "details": {},
+      "correction_prompt": null
+    },
+    {
+      "check_name": "Solution Safety",
+      "category": "Safety",
+      "passed": true,
+      "score": 1.0,
+      "message": "Solution is safe",
+      "severity": "FeedbackSeverity.SUGGESTION",
+      "details": {},
+      "correction_prompt": null
+    },
+    {
+      "check_name": "Hallucination Detection",
+      "category": "Accuracy",
+      "passed": true,
+      "score": 1.0,
+      "message": "No hallucinations detected",
+      "severity": "FeedbackSeverity.SUGGESTION",
+      "details": {},
+      "correction_prompt": null
+    },
+    {
+      "check_name": "Solution Originality",
+      "category": "Quality",
+      "passed": true,
+      "score": 1.0,
+      "message": "Solution provides original content",
+      "severity": "FeedbackSeverity.SUGGESTION",
+      "details": {},
+      "correction_prompt": null
+    },
+    {
+      "check_name": "Professional Tone",
+      "category": "Professionalism",
+      "passed": true,
+      "score": 1.0,
+      "message": "Professional tone maintained",
+      "severity": "FeedbackSeverity.SUGGESTION",
+      "details": {},
+      "correction_prompt": null
+    }
+  ],
+  "critical_issues": [],
+  "errors": [],
+  "warnings": [],
+  "suggestions": [],
+  "self_correction_prompt": "Solution approved. No corrections needed.",
+  "timestamp": "2026-01-18T11:59:22.345247",
+  "iteration": 1
+}

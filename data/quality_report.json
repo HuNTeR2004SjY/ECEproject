@@ -1,0 +1,423 @@
+{
+  "timestamp": "2026-01-18T15:25:45.336821",
+  "project_dir": "D:\\Project\\ECE",
+  "overall_status": "APPROVED",
+  "approved": true,
+  "score": 71,
+  "max_score": 80,
+  "percentage": 88.75,
+  "errors": 0,
+  "warnings": 3,
+  "checks": [
+    {
+      "name": "Required File: preprocess_4tags.py",
+      "status": "PASS",
+      "message": "Found (Size: 14,698 bytes)",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "size": 14698,
+        "path": "D:\\Project\\ECE\\preprocess_4tags.py"
+      },
+      "timestamp": "2026-01-18T15:25:45.337811"
+    },
+    {
+      "name": "Required File: train_model.py",
+      "status": "PASS",
+      "message": "Found (Size: 27,016 bytes)",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "size": 27016,
+        "path": "D:\\Project\\ECE\\train_model.py"
+      },
+      "timestamp": "2026-01-18T15:25:45.337811"
+    },
+    {
+      "name": "Required File: inference_service_full.py",
+      "status": "PASS",
+      "message": "Found (Size: 15,437 bytes)",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "size": 15437,
+        "path": "D:\\Project\\ECE\\inference_service_full.py"
+      },
+      "timestamp": "2026-01-18T15:25:45.337811"
+    },
+    {
+      "name": "Required File: problem_solver_fixed.py",
+      "status": "PASS",
+      "message": "Found (Size: 19,940 bytes)",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "size": 19940,
+        "path": "D:\\Project\\ECE\\problem_solver_fixed.py"
+      },
+      "timestamp": "2026-01-18T15:25:45.337811"
+    },
+    {
+      "name": "Data Files",
+      "status": "PASS",
+      "message": "Found 3 CSV file(s)",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "files": [
+          "english-customer-support-tickets.csv",
+          "processed_tickets.csv",
+          "processed_tickets_4tags.csv"
+        ]
+      },
+      "timestamp": "2026-01-18T15:25:45.339314"
+    },
+    {
+      "name": "Trained Model",
+      "status": "PASS",
+      "message": "Model found in trained_model/",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "model_dir": "D:\\Project\\ECE\\trained_model",
+        "files": 2
+      },
+      "timestamp": "2026-01-18T15:25:45.339314"
+    },
+    {
+      "name": "Syntax: preprocess_4tags.py",
+      "status": "PASS",
+      "message": "No syntax errors detected",
+      "score": 1,
+      "max_score": 1,
+      "details": null,
+      "timestamp": "2026-01-18T15:25:45.344259"
+    },
+    {
+      "name": "Quality Indicators: preprocess_4tags.py",
+      "status": "WARN",
+      "message": "Score: 4/6 indicators present",
+      "score": 2,
+      "max_score": 3,
+      "details": {
+        "has_docstrings": true,
+        "has_comments": true,
+        "has_error_handling": false,
+        "has_logging": true,
+        "has_functions": true,
+        "has_main_guard": false
+      },
+      "timestamp": "2026-01-18T15:25:45.344259"
+    },
+    {
+      "name": "Syntax: train_model.py",
+      "status": "PASS",
+      "message": "No syntax errors detected",
+      "score": 1,
+      "max_score": 1,
+      "details": null,
+      "timestamp": "2026-01-18T15:25:45.348410"
+    },
+    {
+      "name": "Quality Indicators: train_model.py",
+      "status": "WARN",
+      "message": "Score: 4/6 indicators present",
+      "score": 2,
+      "max_score": 3,
+      "details": {
+        "has_docstrings": true,
+        "has_comments": true,
+        "has_error_handling": false,
+        "has_logging": true,
+        "has_functions": true,
+        "has_main_guard": false
+      },
+      "timestamp": "2026-01-18T15:25:45.348926"
+    },
+    {
+      "name": "Syntax: inference_service_full.py",
+      "status": "PASS",
+      "message": "No syntax errors detected",
+      "score": 1,
+      "max_score": 1,
+      "details": null,
+      "timestamp": "2026-01-18T15:25:45.350962"
+    },
+    {
+      "name": "Quality Indicators: inference_service_full.py",
+      "status": "PASS",
+      "message": "Score: 5/6 indicators present",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "has_docstrings": true,
+        "has_comments": true,
+        "has_error_handling": true,
+        "has_logging": true,
+        "has_functions": true,
+        "has_main_guard": false
+      },
+      "timestamp": "2026-01-18T15:25:45.350962"
+    },
+    {
+      "name": "Syntax: problem_solver_fixed.py",
+      "status": "PASS",
+      "message": "No syntax errors detected",
+      "score": 1,
+      "max_score": 1,
+      "details": null,
+      "timestamp": "2026-01-18T15:25:45.354311"
+    },
+    {
+      "name": "Quality Indicators: problem_solver_fixed.py",
+      "status": "PASS",
+      "message": "Score: 5/6 indicators present",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "has_docstrings": true,
+        "has_comments": true,
+        "has_error_handling": true,
+        "has_logging": true,
+        "has_functions": true,
+        "has_main_guard": false
+      },
+      "timestamp": "2026-01-18T15:25:45.354311"
+    },
+    {
+      "name": "Dataset Size",
+      "status": "PASS",
+      "message": "23,740 samples (minimum: 1,000)",
+      "score": 6,
+      "max_score": 6,
+      "details": {
+        "samples": 23740,
+        "features": 10
+      },
+      "timestamp": "2026-01-18T15:25:45.539705"
+    },
+    {
+      "name": "Required Columns",
+      "status": "PASS",
+      "message": "All 4 required columns present",
+      "score": 4,
+      "max_score": 4,
+      "details": {
+        "columns": [
+          "subject",
+          "body",
+          "answer",
+          "type",
+          "queue",
+          "priority",
+          "tag_1",
+          "tag_2",
+          "tag_3",
+          "tag_4"
+        ]
+      },
+      "timestamp": "2026-01-18T15:25:45.540715"
+    },
+    {
+      "name": "Missing Data",
+      "status": "PASS",
+      "message": "2.09% missing (max: 5.00%)",
+      "score": 4,
+      "max_score": 4,
+      "details": {
+        "missing_ratio": 0.020867733782645323
+      },
+      "timestamp": "2026-01-18T15:25:45.547024"
+    },
+    {
+      "name": "Class Balance: priority",
+      "status": "PASS",
+      "message": "Min class: 4,845 samples (min: 50)",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "class_distribution": {
+          "Medium": 9748,
+          "High": 9147,
+          "Low": 4845
+        }
+      },
+      "timestamp": "2026-01-18T15:25:45.550926"
+    },
+    {
+      "name": "Class Balance: type",
+      "status": "PASS",
+      "message": "Min class: 2,503 samples (min: 50)",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "class_distribution": {
+          "Incident": 9433,
+          "Request": 6879,
+          "Problem": 4925,
+          "Change": 2503
+        }
+      },
+      "timestamp": "2026-01-18T15:25:45.552197"
+    },
+    {
+      "name": "Text Quality: subject",
+      "status": "PASS",
+      "message": "Avg length: 39 chars (min: 10)",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "avg_length": 38.57481044650379
+      },
+      "timestamp": "2026-01-18T15:25:45.556471"
+    },
+    {
+      "name": "Text Quality: body",
+      "status": "PASS",
+      "message": "Avg length: 376 chars (min: 10)",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "avg_length": 376.44953664700927
+      },
+      "timestamp": "2026-01-18T15:25:45.561312"
+    },
+    {
+      "name": "Model Size",
+      "status": "PASS",
+      "message": "422.4 MB (range: 0.1-5000 MB)",
+      "score": 4,
+      "max_score": 4,
+      "details": {
+        "size_mb": 422.3818464279175,
+        "path": "D:\\Project\\ECE\\trained_model\\model.pth"
+      },
+      "timestamp": "2026-01-18T15:25:45.564180"
+    },
+    {
+      "name": "Model Loading",
+      "status": "PASS",
+      "message": "Model loads successfully",
+      "score": 6,
+      "max_score": 6,
+      "details": {
+        "model_type": "PyTorch Model"
+      },
+      "timestamp": "2026-01-18T15:25:47.715692"
+    },
+    {
+      "name": "README File",
+      "status": "WARN",
+      "message": "No README found",
+      "score": 0,
+      "max_score": 5,
+      "details": null,
+      "timestamp": "2026-01-18T15:25:47.716478"
+    },
+    {
+      "name": "Dependencies",
+      "status": "PASS",
+      "message": "10 dependencies documented",
+      "score": 3,
+      "max_score": 3,
+      "details": {
+        "count": 10,
+        "dependencies": [
+          "torch>=2.0.0",
+          "transformers>=4.30.0",
+          "scikit-learn>=1.3.0",
+          "pandas>=2.0.0",
+          "numpy>=1.24.0",
+          "nltk>=3.8.0",
+          "flask>=2.3.0",
+          "sqlite3",
+          "tqdm>=4.65.0",
+          "joblib>=1.3.0"
+        ]
+      },
+      "timestamp": "2026-01-18T15:25:47.717052"
+    },
+    {
+      "name": "Optional Docs",
+      "status": "SKIP",
+      "message": "No optional documentation found",
+      "score": 0,
+      "max_score": 2,
+      "details": null,
+      "timestamp": "2026-01-18T15:25:47.717052"
+    }
+  ],
+  "feedback": [
+    {
+      "category": "Code Quality",
+      "message": "preprocess_4tags.py: Consider adding more documentation and error handling",
+      "severity": "WARNING",
+      "timestamp": "2026-01-18T15:25:45.344259"
+    },
+    {
+      "category": "Code Quality",
+      "message": "train_model.py: Consider adding more documentation and error handling",
+      "severity": "WARNING",
+      "timestamp": "2026-01-18T15:25:45.348926"
+    },
+    {
+      "category": "Documentation",
+      "message": "Add README.md with project description and usage instructions",
+      "severity": "WARNING",
+      "timestamp": "2026-01-18T15:25:47.716478"
+    }
+  ],
+  "execution_time": 2.380231,
+  "metadata": {
+    "python_version": "3.12.8 (tags/v3.12.8:2dc476b, Dec  3 2024, 19:30:04) [MSC v.1942 64 bit (AMD64)]",
+    "config": {
+      "thresholds": {
+        "min_accuracy": 0.7,
+        "min_data_size": 1000,
+        "max_missing_data": 0.05,
+        "min_confidence": 0.6,
+        "min_class_samples": 50,
+        "min_text_length": 10,
+        "max_text_length": 10000,
+        "min_model_size_mb": 0.1,
+        "max_model_size_mb": 5000
+      },
+      "required_files": [
+        "preprocess_4tags.py",
+        "train_model.py",
+        "inference_service_full.py",
+        "problem_solver_fixed.py"
+      ],
+      "optional_files": [
+        "README.md",
+        "requirements.txt",
+        "config.json",
+        ".gitignore"
+      ],
+      "model_dirs": [
+        "trained_model",
+        "model_output",
+        "models"
+      ],
+      "data_columns": {
+        "required": [
+          "subject",
+          "body"
+        ],
+        "target": [
+          "priority",
+          "type"
+        ]
+      },
+      "scoring_weights": {
+        "project_structure": 20,
+        "code_quality": 20,
+        "data_quality": 30,
+        "model_performance": 20,
+        "documentation": 10
+      },
+      "approval_threshold": 80,
+      "warning_threshold": 60
+    }
+  }
+}
