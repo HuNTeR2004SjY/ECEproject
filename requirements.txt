@@ -1,0 +1,12 @@
+flask
+flask-login
+werkzeug
+fastapi
+uvicorn
+pydantic
+groq
+transformers
+torch
+scikit-learn
+numpy
+pandas

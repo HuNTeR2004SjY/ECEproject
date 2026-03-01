@@ -241,6 +241,72 @@ body::before {
     color: #b91c1c;
 }
 
+/* Progressive streaming states */
+.badge-processing {
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+}
+
+.badge-solving {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+/* Animated solving dots */
+.solving-dots span {
+    display: inline-block;
+    animation: solvingBounce 1.2s infinite;
+    font-size: 1.4em;
+    font-weight: 700;
+    color: var(--primary-light);
+    margin: 0 1px;
+}
+
+.solving-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.solving-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes solvingBounce {
+
+    0%,
+    80%,
+    100% {
+        opacity: 0.2;
+        transform: translateY(0);
+    }
+
+    40% {
+        opacity: 1;
+        transform: translateY(-4px);
+    }
+}
+
+.solving-pulse {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* Solution card pop-in when answer arrives */
+@keyframes solutionPopIn {
+    0% {
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.solution-arrived {
+    animation: solutionPopIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
 .solution-content {
     padding: 1.5rem;
     font-size: 1rem;
@@ -488,7 +554,7 @@ body::before {
     background: rgba(255, 255, 255, 0.05);
     border-radius: 10px;
     overflow: hidden;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 .confidence-fill {
@@ -1191,6 +1257,7 @@ body::before {
     transform: translateY(-1px);
     box-shadow: var(--shadow-glow);
 }
+
 /* Chat UI Improvements */
 .chat-input-area {
     display: flex;
@@ -1267,7 +1334,8 @@ body::before {
     flex-direction: column;
     gap: 20px;
     scroll-behavior: smooth;
-    padding-bottom: 100px; /* Space for floating input */
+    padding-bottom: 100px;
+    /* Space for floating input */
 }
 
 /* Chat Bubbles */
@@ -1290,7 +1358,8 @@ body::before {
 
 .chat-bubble.ai {
     align-self: flex-start;
-    background: var(--bg-card); /* Neutral/Dark for AI */
+    background: var(--bg-card);
+    /* Neutral/Dark for AI */
     color: var(--text-primary);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-bottom-left-radius: 4px;
@@ -1311,13 +1380,15 @@ body::before {
     transform: translateX(-50%);
     width: 90%;
     max-width: 700px;
-    background: var(--bg-card); /* Match card bg */
+    background: var(--bg-card);
+    /* Match card bg */
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 30px; /* Pill shape */
+    border-radius: 30px;
+    /* Pill shape */
     padding: 8px 8px 8px 20px;
     display: flex;
     align-items: center;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     backdrop-filter: blur(10px);
 }
 
@@ -1327,7 +1398,8 @@ body::before {
     border: none;
     color: var(--text-primary);
     font-size: 1rem;
-    height: 40px; /* One line height initially */
+    height: 40px;
+    /* One line height initially */
     max-height: 120px;
     padding: 8px 0;
     resize: none;
@@ -1361,8 +1433,8 @@ body::before {
 .chat-messages::-webkit-scrollbar {
     width: 6px;
 }
+
 .chat-messages::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 3px;
 }
-

@@ -7,7 +7,7 @@ Run: python app.py
 Then open: http://localhost:5000 (or configured port)
 """
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session, Response, stream_with_context
 import sys
 import uuid
 import logging
@@ -27,6 +27,9 @@ from src.problem_solver_fixed import ProblemSolver
 from src.inference_service_full import TriageSpecialist
 from src.automation_specialist import AutomationSpecialist
 from src.models import User, Department
+from explainable_triage import ExplainableTriageWrapper
+from pattern_miner import PatternMiner
+from src.workflow_manager import WorkflowManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -54,6 +57,9 @@ def load_user(user_id):
 solver = None
 automation_specialist = None
 process_monitor = None
+xai_wrapper = ExplainableTriageWrapper()
+pattern_miner = PatternMiner(db_path=config.DATABASE_PATH)
+workflow_manager = None
 
 
 class LogStatusReporter:
@@ -89,6 +95,16 @@ def init_solver():
         automation_specialist = AutomationSpecialist(email_config=config.EMAIL_CONFIG)
         logger.info("Automation Specialist Ready!")
 
+    global workflow_manager
+    if workflow_manager is None:
+        from src.workflow_manager import WorkflowManager
+        # Uses the shared triage and solver
+        workflow_manager = WorkflowManager(
+            triage_specialist=solver.triage_specialist if solver else None,
+            problem_solver=solver,
+            automation_specialist=automation_specialist
+        )
+
     # Initialize ProcessMonitor
     if process_monitor is None:
         try:
@@ -97,14 +113,113 @@ def init_solver():
             process_monitor = ProcessMonitor(
                 db_path=config.DATABASE_PATH,
                 status_reporter=LogStatusReporter(),
-                check_interval_seconds=60
+                check_interval_seconds=300
             )
             process_monitor.start()
             logger.info("Process Monitor Agent Started!")
         except Exception as e:
             logger.error(f"Failed to start Process Monitor: {e}")
+            
+    # Initialize DB schemas and auto-close background job
+    init_db_schema()
+    start_auto_close_job()
 
+def init_db_schema():
+    try:
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        # Add columns if not exist
+        try:
+            cursor.execute("ALTER TABLE classified_tickets ADD COLUMN human_agent TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE classified_tickets ADD COLUMN resolution_notes TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE classified_tickets ADD COLUMN resolved_at TIMESTAMP")
+        except sqlite3.OperationalError:
+            pass
+            
+        # Create knowledge_base table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS knowledge_base (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject TEXT,
+                body TEXT,
+                solution TEXT,
+                source TEXT,
+                tags TEXT,
+                queue TEXT,
+                created_at TIMESTAMP
+            )
+        ''')
+        conn.commit()
+        conn.close()
+        logger.info("Database schema migrations completed.")
+    except Exception as e:
+        logger.error(f"Failed to initialize database schema: {e}")
 
+def auto_close_tickets():
+    try:
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cutoff = datetime.now() - timedelta(days=3)
+        cursor.execute('''
+            SELECT id, user_id FROM classified_tickets 
+            WHERE status IN ('solution_proposed', 'escalated_resolved') 
+            AND timestamp < ?
+        ''', (cutoff.isoformat(),))
+        
+        stale_tickets = cursor.fetchall()
+        
+        if stale_tickets:
+            cursor.execute('''
+                UPDATE classified_tickets 
+                SET status = 'auto_closed', corrected = 1 
+                WHERE status IN ('solution_proposed', 'escalated_resolved') 
+                AND timestamp < ?
+            ''', (cutoff.isoformat(),))
+            conn.commit()
+            
+            # Send emails
+            if automation_specialist is not None and hasattr(automation_specialist, 'gmail_api') and automation_specialist.gmail_api.available:
+                from email.mime.text import MIMEText
+                from email.mime.multipart import MIMEMultipart
+                for t_id, user_id in stale_tickets:
+                    try:
+                        cursor.execute("SELECT email FROM users WHERE id = ?", (user_id,))
+                        row = cursor.fetchone()
+                        if row:
+                            user_email = row[0]
+                            msg = MIMEMultipart('alternative')
+                            msg['Subject'] = f'Ticket #{t_id} Auto-Closed'
+                            msg['To'] = user_email
+                            msg['From'] = 'eceproject2026@gmail.com'
+                            html = f"We're closing ticket #{t_id} as we haven't heard back. Reply to reopen anytime."
+                            msg.attach(MIMEText(html, 'html'))
+                            automation_specialist.gmail_api.send(msg)
+                    except Exception as email_e:
+                        logger.error(f"Failed to send auto-close email for {t_id}: {email_e}")
+                        
+        conn.close()
+    except Exception as e:
+        logger.error(f"Auto-close job failed: {e}")
+
+def start_auto_close_job():
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(func=auto_close_tickets, trigger="interval", hours=1)
+        scheduler.start()
+        logger.info("Auto-close scheduler started.")
+    except ImportError:
+        logger.warning("APScheduler not installed. Auto-close job will not run. Run 'pip install apscheduler'.")
+    except Exception as e:
+        logger.error(f"Failed to start APScheduler: {e}")
 
 @app.route('/')
 def index():
@@ -174,7 +289,7 @@ def admin_dashboard():
     return render_template('admin_dashboard.html', user=current_user, tickets=tickets, stats=stats)
 
 
-@app.route('/api/admin/users', methods=['GET', 'POST'])
+@app.route('/api/admin/users', methods=['GET', 'POST', 'DELETE'])
 @login_required
 def admin_users():
     if current_user.role != 'admin':
@@ -384,6 +499,20 @@ def predict():
                 if automation_specialist is None:
                         init_solver()
                 
+                # Append confirmation links
+                if not result.get('escalated') and result.get('solution'):
+                    base_url = request.host_url.rstrip('/')
+                    confirm_yes = f"{base_url}/ticket/confirm/{ticket_id}?response=yes"
+                    confirm_no = f"{base_url}/ticket/confirm/{ticket_id}?response=no"
+                    
+                    confirmation_block = f"""
+<br><hr><br>
+<b>Did this resolve your issue?</b><br>
+✅ Yes, close my ticket: <a href="{confirm_yes}">{confirm_yes}</a><br>
+❌ No, I still need help: <a href="{confirm_no}">{confirm_no}</a>
+"""
+                    result['solution'] += confirmation_block
+                
                 # Call unified notification
                 automation_specialist.notify_ticket_resolution(
                     ticket_data=ticket_data,
@@ -418,12 +547,190 @@ def predict():
             'tags': [t['tag'] for t in result['triage']['tags'][:5]],
             'tag_scores': [round(t['confidence'] * 100, 1) for t in result['triage']['tags'][:5]]
         }
-        
+        # ---------------------------------------------------------
+        # EXPLAINABLE AI LAYER
+        # ---------------------------------------------------------
+        try:
+            explanation = xai_wrapper.explain(
+                triage_result=result['triage'],
+                ticket_subject=subject,
+                ticket_body=body
+            )
+            response['explanation'] = explanation.to_dict()
+        except Exception as e:
+            logger.error(f"XAI wrapper failed during /predict: {e}")
+            response['explanation'] = {"error": "Explanation generation failed."}
+            
+        # ---------------------------------------------------------
+        # REAL-TIME SYSTEMIC ALERT MINING
+        # ---------------------------------------------------------
+        try:
+            systemic_alert = pattern_miner.mine(ticket_id, subject, body)
+            if systemic_alert and not systemic_alert.already_known:
+                logger.warning(f"SYSTEMIC ALERT triggered: {systemic_alert.alert_id}")
+            response['systemic_alert'] = systemic_alert.to_dict() if systemic_alert else None
+        except Exception as e:
+            logger.error(f"Pattern Miner failed during /predict: {e}")
+            response['systemic_alert'] = None
+            
         return jsonify(response)
         
     except Exception as e:
         logger.error(f"Error processing ticket: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/predict/stream', methods=['POST'])
+@login_required
+def predict_stream():
+    """
+    Streaming SSE endpoint for progressive ticket processing.
+    Yields:
+      1. 'triage'   event — immediately after triage (~1-2s)
+      2. 'solution' event — after problem solver finishes (~10-30s)
+      3. 'done'     event — signals completion
+    """
+    global solver, automation_specialist
+
+    if solver is None:
+        init_solver()
+
+    data = request.json
+    subject = data.get('subject', '')
+    body = data.get('body', '')
+
+    if not subject or not body:
+        def error_stream():
+            yield f"event: error\ndata: {json.dumps({'error': 'Please provide both subject and body'})}\n\n"
+        return Response(stream_with_context(error_stream()), mimetype='text/event-stream')
+
+    # Capture user identity before entering generator (request context not available inside)
+    user_authenticated = current_user.is_authenticated
+    user_company_id = current_user.company_id if user_authenticated else None
+    user_id_str = str(current_user.id) if user_authenticated else "unknown"
+    user_email = current_user.email if user_authenticated else "eceproject2026+unknown@gmail.com"
+
+    def generate():
+        try:
+            # --- Compute ticket_id ---
+            company_abbr = "UNK"
+            try:
+                conn_c = sqlite3.connect(config.DATABASE_PATH)
+                cursor_c = conn_c.cursor()
+                if user_company_id:
+                    cursor_c.execute("SELECT name FROM companies WHERE id = ?", (user_company_id,))
+                    row_c = cursor_c.fetchone()
+                    if row_c:
+                        company_abbr = row_c[0][:3].upper()
+                cursor_c.execute("SELECT COUNT(*) FROM classified_tickets")
+                seq_num = (cursor_c.fetchone()[0] or 0) + 1
+                conn_c.close()
+            except Exception:
+                seq_num = 1
+
+            ticket_id = f"{company_abbr}{user_id_str}{seq_num:04d}"
+
+            # --- STEP 1: Triage (fast ~1-2s) ---
+            logger.info(f"[STREAM] Triage starting for ticket {ticket_id}")
+            triage_result = solver.triage.predict(
+                subject=subject,
+                body=body,
+                retrieve_answer=True
+            )
+
+            triage_event = {
+                'ticket_id': ticket_id,
+                'type': triage_result['type'],
+                'type_confidence': round(triage_result['type_confidence'] * 100, 1),
+                'priority': triage_result['priority'],
+                'priority_confidence': round(triage_result['priority_confidence'] * 100, 1),
+                'queue': triage_result['queue'],
+                'queue_confidence': round(triage_result['queue_confidence'] * 100, 1),
+                'tags': [t['tag'] for t in triage_result['tags'][:5]],
+                'tag_scores': [round(t['confidence'] * 100, 1) for t in triage_result['tags'][:5]],
+            }
+            yield f"event: triage\ndata: {json.dumps(triage_event)}\n\n"
+            logger.info(f"[STREAM] Triage event sent for ticket {ticket_id}")
+
+            # --- STEP 2: Full solve (slow, uses triage result internally) ---
+            logger.info(f"[STREAM] Solver starting for ticket {ticket_id}")
+            result = solver.solve(subject=subject, body=body, ticket_id=ticket_id)
+
+            # --- Save ticket to DB ---
+            try:
+                conn = sqlite3.connect(config.DATABASE_PATH)
+                cursor = conn.cursor()
+                status = 'escalated' if result.get('escalated') else 'solution_proposed'
+
+                cursor.execute('''
+                    INSERT INTO classified_tickets
+                    (id, subject, body, pred_type, pred_priority, pred_queue, timestamp, corrected, user_id, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                ''', (
+                    ticket_id, subject, body,
+                    result['triage']['type'], result['triage']['priority'], result['triage']['queue'],
+                    datetime.now(), user_id_str if user_authenticated else None, status
+                ))
+
+                cursor.execute(
+                    "INSERT INTO ticket_interactions (ticket_id, sender, message, timestamp) VALUES (?, 'user', ?, ?)",
+                    (ticket_id, body, datetime.now())
+                )
+                if result.get('solution'):
+                    cursor.execute(
+                        "INSERT INTO ticket_interactions (ticket_id, sender, message, timestamp) VALUES (?, 'ai', ?, ?)",
+                        (ticket_id, result['solution'], datetime.now())
+                    )
+
+                conn.commit()
+                conn.close()
+                logger.info(f"[STREAM] Ticket {ticket_id} saved (status: {status})")
+
+                # Notifications
+                try:
+                    if automation_specialist is None:
+                        init_solver()
+                    ticket_data = {
+                        'id': ticket_id, 'subject': subject, 'body': body,
+                        'type': result['triage']['type'], 'priority': result['triage']['priority'],
+                        'user_id': user_id_str, 'status': status
+                    }
+                    automation_specialist.notify_ticket_resolution(
+                        ticket_data=ticket_data, result=result, user_email=user_email
+                    )
+                except Exception as notify_err:
+                    logger.error(f"[STREAM] Notification failed: {notify_err}")
+
+            except Exception as db_err:
+                logger.error(f"[STREAM] DB save failed: {db_err}")
+
+            # --- Yield solution event ---
+            solution_event = {
+                'ticket_id': ticket_id,
+                'success': result['success'],
+                'solution': result.get('solution'),
+                'confidence': round(result.get('confidence', 0.0) * 100, 1),
+                'method': result.get('method', 'unknown'),
+                'attempts': result.get('attempts', 1),
+                'escalated': result.get('escalated', False),
+                'escalation_reason': result.get('escalation_reason', ''),
+            }
+            yield f"event: solution\ndata: {json.dumps(solution_event)}\n\n"
+
+            yield f"event: done\ndata: {json.dumps({'ticket_id': ticket_id})}\n\n"
+
+        except Exception as e:
+            logger.error(f"[STREAM] Error: {e}", exc_info=True)
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+        }
+    )
 
 
 @app.route('/api/ticket/<ticket_id>/details', methods=['GET'])
@@ -475,6 +782,78 @@ def get_ticket_details(ticket_id):
         logger.error(f"Error fetching ticket details: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/ticket/<ticket_id>/explanation', methods=['GET'])
+@login_required
+def get_ticket_explanation(ticket_id):
+    """
+    Regenerates the Explainable AI rationale for a historical ticket.
+    """
+    try:
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        # 1. Fetch ticket subject, body, and predictions
+        cursor.execute('''
+            SELECT subject, body, pred_type, pred_priority, pred_queue 
+            FROM classified_tickets 
+            WHERE id = ?
+        ''', (ticket_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return jsonify({'error': 'Ticket not found'}), 404
+            
+        subject, body, p_type, p_priority, p_queue = row
+        
+        # 2. Fetch tags (stored in DB as a comma-separated string or in ticket_tags if changed)
+        # Note: If tags aren't logged in DB, we mock empty.
+        tags = []
+        
+        # Reconstruct the triage_result dict using default confidences (.75) per requirements
+        triage_result = {
+            'type': p_type,
+            'type_confidence': 0.75,
+            'priority': p_priority,
+            'priority_confidence': 0.75,
+            'queue': p_queue,
+            'queue_confidence': 0.75,
+            'tags': tags
+        }
+        
+        # Generate Explanation
+        explanation = xai_wrapper.explain(triage_result, subject, body)
+        conn.close()
+        
+        return jsonify({'explanation': explanation.to_dict()})
+        
+    except Exception as e:
+        logger.error(f"Error fetching XAI explanation for {ticket_id}: {e}")
+        return jsonify({'error': 'Failed to generate explanation'}), 500
+
+@app.route('/api/admin/systemic-alerts', methods=['GET'])
+@login_required
+def get_systemic_alerts():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    try:
+        alerts = pattern_miner.get_active_alerts(50)
+        return jsonify({'alerts': alerts, 'count': len(alerts)})
+    except Exception as e:
+        logger.error(f"Error fetching systemic alerts: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ticket/<ticket_id>/cluster', methods=['GET'])
+@login_required
+def get_ticket_cluster(ticket_id):
+    try:
+        cluster = pattern_miner.get_cluster_for_ticket(ticket_id)
+        if cluster:
+            return jsonify({'in_cluster': True, 'cluster': cluster})
+        return jsonify({'in_cluster': False})
+    except Exception as e:
+        logger.error(f"Error fetching cluster for {ticket_id}: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/ticket/<ticket_id>/reply', methods=['POST'])
 @login_required
@@ -1142,6 +1521,210 @@ def send_test_notification():
         logger.error(f"Error sending test notification: {e}")
         return jsonify({'error': str(e)}), 500
 
+
+@app.route('/ticket/confirm/<ticket_id>', methods=['GET'])
+def confirm_resolution(ticket_id):
+    response = request.args.get('response', '').lower()
+    
+    try:
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT id, subject, body, status, user_id FROM classified_tickets WHERE id = ?", (ticket_id,))
+        row = cursor.fetchone()
+        
+        if not row:
+            conn.close()
+            return "Ticket not found.", 404
+            
+        t_id, subject, body, status, user_id = row
+        
+        if status in ['resolved', 'auto_closed']:
+            conn.close()
+            return f"<html><body style='font-family:sans-serif; text-align:center; padding-top: 50px;'><h2>Ticket #{ticket_id} is already closed.</h2></body></html>"
+
+        # Get User Email
+        cursor.execute("SELECT email FROM users WHERE id = ?", (user_id,))
+        u_row = cursor.fetchone()
+        user_email = u_row[0] if u_row else None
+        
+        if response == 'yes':
+            cursor.execute("UPDATE classified_tickets SET status = 'resolved', corrected = 1, resolved_at = ? WHERE id = ?", (datetime.now(), ticket_id))
+            conn.commit()
+            
+            # Send warm closing email
+            if user_email and automation_specialist is not None and hasattr(automation_specialist, 'gmail_api') and automation_specialist.gmail_api.available:
+                try:
+                    from email.mime.text import MIMEText
+                    from email.mime.multipart import MIMEMultipart
+                    msg = MIMEMultipart('alternative')
+                    msg['Subject'] = f'Ticket #{ticket_id} Closed'
+                    msg['To'] = user_email
+                    msg['From'] = 'eceproject2026@gmail.com'
+                    html = f"Glad we could help! Ticket #{ticket_id} is now closed."
+                    msg.attach(MIMEText(html, 'html'))
+                    automation_specialist.gmail_api.send(msg)
+                except Exception as e:
+                    logger.error(f"Failed to send close email: {e}")
+            conn.close()
+            return f"<html><body style='font-family:sans-serif; text-align:center; padding-top: 50px;'><h2 style='color:green;'>✅ Thank you! Ticket #{ticket_id} is now closed.</h2></body></html>"
+            
+        elif response == 'no':
+            cursor.execute("UPDATE classified_tickets SET status = 'reopened' WHERE id = ?", (ticket_id,))
+            conn.commit()
+            
+            # Email user
+            if user_email and automation_specialist is not None and hasattr(automation_specialist, 'gmail_api') and automation_specialist.gmail_api.available:
+                try:
+                    from email.mime.text import MIMEText
+                    from email.mime.multipart import MIMEMultipart
+                    msg = MIMEMultipart('alternative')
+                    msg['Subject'] = f'Update on Ticket #{ticket_id}'
+                    msg['To'] = user_email
+                    msg['From'] = 'eceproject2026@gmail.com'
+                    html = f"We have reopened Ticket #{ticket_id} and escalated its priority. An expert will review it shortly."
+                    msg.attach(MIMEText(html, 'html'))
+                    automation_specialist.gmail_api.send(msg)
+                except Exception as e:
+                    pass
+            
+            conn.close()
+            
+            # Re-trigger workflow with increased priority
+            if workflow_manager is not None:
+                try:
+                    enhanced_subject = f"[URGENT - REOPENED] {subject}"
+                    workflow_manager.process_ticket(
+                        subject=enhanced_subject,
+                        body=body,
+                        user_email=user_email or 'unknown@example.com',
+                        user_id=user_id,
+                        ticket_id=ticket_id
+                    )
+                except Exception as wf_e:
+                    logger.error(f"Failed to re-trigger workflow for {ticket_id}: {wf_e}")
+                    
+            return f"<html><body style='font-family:sans-serif; text-align:center; padding-top: 50px;'><h2 style='color:orange;'>Your ticket #{ticket_id} has been reopened and escalated to an expert.</h2></body></html>"
+            
+    except Exception as e:
+        logger.error(f"Error in confirm_resolution: {e}")
+        return "An error occurred.", 500
+
+@app.route('/api/admin/ticket/<ticket_id>/claim', methods=['POST'])
+@login_required
+def claim_ticket(ticket_id):
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    try:
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE classified_tickets SET status = 'in_progress', human_agent = ? WHERE id = ?", (current_user.username, ticket_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Ticket claimed'})
+    except Exception as e:
+        logger.error(f"Error claiming ticket: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/ticket/<ticket_id>/human-resolve', methods=['POST'])
+@login_required
+def human_resolve_ticket(ticket_id):
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    try:
+        data = request.json
+        resolution_notes = data.get('resolution_notes', '')
+        save_to_kb = data.get('save_to_kb', True)
+        
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        # Get ticket details
+        cursor.execute("SELECT subject, body, user_id, pred_type, pred_queue FROM classified_tickets WHERE id = ?", (ticket_id,))
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return jsonify({'error': 'Ticket not found'}), 404
+            
+        subject, body, user_id, p_type, p_queue = row
+        
+        # Update ticket
+        cursor.execute('''
+            UPDATE classified_tickets 
+            SET status = 'resolved', corrected = 1, resolution_notes = ?, resolved_at = ?, human_agent = ? 
+            WHERE id = ?
+        ''', (resolution_notes, datetime.now(), current_user.username, ticket_id))
+        
+        # Save to KB
+        if save_to_kb:
+            cursor.execute('''
+                INSERT INTO knowledge_base (subject, body, solution, source, tags, queue, created_at)
+                VALUES (?, ?, ?, 'human_expert', ?, ?, ?)
+            ''', (subject, body, resolution_notes, 'human_expert', p_type, p_queue, datetime.now()))
+            
+        conn.commit()
+        
+        # Send Email
+        cursor.execute("SELECT email FROM users WHERE id = ?", (user_id,))
+        u_row = cursor.fetchone()
+        if u_row and automation_specialist is not None and hasattr(automation_specialist, 'gmail_api') and automation_specialist.gmail_api.available:
+            user_email = u_row[0]
+            from email.mime.text import MIMEText
+            from email.mime.multipart import MIMEMultipart
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = f'Update on Ticket #{ticket_id}'
+            msg['To'] = user_email
+            msg['From'] = 'eceproject2026@gmail.com'
+            
+            base_url = request.host_url.rstrip('/')
+            confirm_yes = f"{base_url}/ticket/confirm/{ticket_id}?response=yes"
+            confirm_no = f"{base_url}/ticket/confirm/{ticket_id}?response=no"
+            
+            html = f"""Our expert team has resolved your issue. Here's what was done: <br>
+            <blockquote>{resolution_notes}</blockquote><br>
+            Reply if you need anything else.<br><hr><br>
+            <b>Did this resolve your issue?</b><br>
+            ✅ Yes, close my ticket: <a href="{confirm_yes}">{confirm_yes}</a><br>
+            ❌ No, I still need help: <a href="{confirm_no}">{confirm_no}</a>
+            """
+            msg.attach(MIMEText(html, 'html'))
+            try:
+                automation_specialist.gmail_api.send(msg)
+            except Exception as e:
+                logger.error(f"Failed to send expert resolution email: {e}")
+                
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.error(f"Error in human resolve: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/escalated-tickets', methods=['GET'])
+@login_required
+def list_escalated_tickets():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    try:
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT c.id, c.subject, c.pred_type, c.pred_priority, c.pred_queue, 
+                   c.timestamp, c.status, c.human_agent, c.user_id, u.username as raised_by
+            FROM classified_tickets c
+            LEFT JOIN users u ON c.user_id = u.id
+            WHERE c.status IN ('escalated', 'in_progress', 'reopened')
+            ORDER BY c.timestamp DESC
+        ''')
+        rows = cursor.fetchall()
+        tickets = [dict(row) for row in rows]
+        conn.close()
+        
+        return jsonify(tickets)
+    except Exception as e:
+        logger.error(f"Error fetching escalated tickets: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("\n" + "=" * 50)

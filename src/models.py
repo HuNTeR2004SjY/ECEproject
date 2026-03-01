@@ -123,7 +123,10 @@ class User(UserMixin):
         stats = {
             'total': 0,
             'active': 0,
-            'escalated': 0
+            'escalated': 0,
+            'in_progress': 0,
+            'resolved': 0,
+            'auto_closed': 0
         }
         
         try:
@@ -131,16 +134,25 @@ class User(UserMixin):
             cursor.execute("SELECT COUNT(*) FROM classified_tickets")
             stats['total'] = cursor.fetchone()[0]
             
-            # Active (not corrected/resolved)
-            cursor.execute("SELECT COUNT(*) FROM classified_tickets WHERE corrected = 0")
+            # Active (not resolved/auto_closed/corrected)
+            cursor.execute("SELECT COUNT(*) FROM classified_tickets WHERE status NOT IN ('resolved', 'auto_closed') AND corrected = 0")
             stats['active'] = cursor.fetchone()[0]
             
-            # Escalated (in learning buffer)
-            # OR logic based on prediction? 
-            # Let's say active but low confidence or explicit escalation?
-            # app.py:226 says escalated is count of learning_buffer
-            cursor.execute("SELECT COUNT(*) FROM learning_buffer")
+            # Escalated
+            cursor.execute("SELECT COUNT(*) FROM classified_tickets WHERE status = 'escalated'")
             stats['escalated'] = cursor.fetchone()[0]
+            
+            # In Progress
+            cursor.execute("SELECT COUNT(*) FROM classified_tickets WHERE status = 'in_progress'")
+            stats['in_progress'] = cursor.fetchone()[0]
+            
+            # Resolved (status='resolved' OR corrected=1)
+            cursor.execute("SELECT COUNT(*) FROM classified_tickets WHERE status = 'resolved' OR corrected = 1")
+            stats['resolved'] = cursor.fetchone()[0]
+            
+            # Auto-Closed
+            cursor.execute("SELECT COUNT(*) FROM classified_tickets WHERE status = 'auto_closed'")
+            stats['auto_closed'] = cursor.fetchone()[0]
             
         except Exception:
             pass

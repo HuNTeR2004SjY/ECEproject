@@ -1,4 +1,4 @@
-"""
+﻿"""
 AUTOMATION SPECIALIST
 =====================
 
@@ -35,6 +35,75 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# GMAIL API SENDER (OAuth2 via HTTPS -- works on all networks)
+# ============================================================================
+
+class GmailAPIEmailSender:
+    """
+    Sends emails via the Gmail REST API using a saved OAuth2 token.
+    Works over HTTPS (port 443) -- never blocked on campus/corporate networks.
+
+    Prerequisites:
+      1. Run scripts/setup_gmail_oauth.py once to generate token.json
+      2. token.json must be placed in the project root directory
+    """
+
+    SCOPES = ['https://www.googleapis.com/auth/gmail.send']
+    TOKEN_PATH = str(Path(config.PROJECT_DIR) / 'token.json')
+    CREDENTIALS_PATH = str(Path(config.PROJECT_DIR) / 'credentials.json')
+
+    def __init__(self):
+        self._service = None   # lazy-loaded
+        self.available = self._check_available()
+
+    def _check_available(self) -> bool:
+        """Return True if token.json exists and packages are installed."""
+        if not Path(self.TOKEN_PATH).exists():
+            logger.info("GmailAPI: token.json not found -- SMTP fallback will be used")
+            return False
+        try:
+            import googleapiclient  # noqa
+            import google.oauth2.credentials  # noqa
+            return True
+        except ImportError:
+            logger.warning("GmailAPI: google-api-python-client not installed -- SMTP fallback will be used")
+            return False
+
+    def _get_service(self):
+        """Load / refresh credentials and return the Gmail API service object."""
+        if self._service:
+            return self._service
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+
+        creds = Credentials.from_authorized_user_file(self.TOKEN_PATH, self.SCOPES)
+        if creds.expired and creds.refresh_token:
+            logger.info("GmailAPI: refreshing access token...")
+            creds.refresh(Request())
+            with open(self.TOKEN_PATH, 'w') as f:
+                f.write(creds.to_json())
+        self._service = build('gmail', 'v1', credentials=creds)
+        return self._service
+
+    def send(self, msg) -> bool:
+        """
+        Send a MIMEMultipart message object via Gmail API.
+        Returns True on success, False on failure.
+        """
+        import base64
+        try:
+            service = self._get_service()
+            raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+            service.users().messages().send(userId='me', body={'raw': raw}).execute()
+            return True
+        except Exception as e:
+            logger.error(f"GmailAPI send failed: {e}")
+            self._service = None   # reset so next attempt re-authenticates
+            return False
 
 
 # ============================================================================
@@ -117,7 +186,10 @@ class NotificationManager:
         """
         self.email_config = email_config or config.EMAIL_CONFIG
         self.notification_history = []
-        
+
+        # Gmail API sender (OAuth2 over HTTPS -- preferred over SMTP)
+        self.gmail_api = GmailAPIEmailSender()
+
         # Initialize AI Email Generator (Groq)
         self.ai_email_generator = GroqEmailGenerator()
         if self.ai_email_generator.enabled:
@@ -256,61 +328,80 @@ class NotificationManager:
     
     def _send_email(self, notification: Dict, user_email: str, ticket: Dict) -> Dict:
         """
-        Send email notification
-        
-        Args:
-            notification: Notification data
-            user_email: Recipient email
-            ticket: Ticket object
-            
-        Returns:
-            Dict with send result
+        Send email notification.
+        Priority order:
+          1. Gmail API (OAuth2 over HTTPS) -- if token.json exists
+          2. SMTP_SSL port 465                -- background thread, 10s timeout
+          3. STARTTLS port 587                -- background thread, 10s timeout
         """
+        import threading, ssl as _ssl
+
         try:
-            # Create email
+            # --- Build the email message ---
             msg = MIMEMultipart('alternative')
             msg['Subject'] = notification['title']
             msg['From'] = self.email_config.get('from_email', 'eceproject2026+noreply@gmail.com')
             msg['To'] = user_email
-            
-            # Generate HTML content
-            # Use AI for body if enabled and appropriate
+
             if self.ai_email_generator.enabled and notification.get('priority') != 'urgent':
-                 try:
-                     ai_body = self.ai_email_generator.generate_email_content(ticket, context=notification['message'])
-                     # Update notification message with AI content (or creating a specific field for it)
-                     # For now, let's keep the structure but inject AI content into the HTML generator
-                     html_content = self._generate_email_html(notification, ticket, ai_body=ai_body)
-                 except Exception as e:
-                     logger.error(f"AI Email generation failed: {e}")
-                     html_content = self._generate_email_html(notification, ticket)
+                try:
+                    ai_body = self.ai_email_generator.generate_email_content(ticket, context=notification['message'])
+                    html_content = self._generate_email_html(notification, ticket, ai_body=ai_body)
+                except Exception as e:
+                    logger.error(f"AI Email generation failed: {e}")
+                    html_content = self._generate_email_html(notification, ticket)
             else:
                 html_content = self._generate_email_html(notification, ticket)
-            
-            # Attach HTML content
+
             msg.attach(MIMEText(html_content, 'html'))
-            
-            # Send email
-            if self.email_config.get('enabled', False):
-                with smtplib.SMTP(
-                    self.email_config['smtp_host'],
-                    self.email_config['smtp_port']
-                ) as server:
-                    server.starttls()
-                    server.login(
-                        self.email_config['smtp_user'],
-                        self.email_config['smtp_password']
-                    )
-                    server.send_message(msg)
-                
-                logger.info(f"Email sent to {user_email} for ticket {ticket['id']}")
-                return {'success': True, 'sent_at': datetime.now().isoformat()}
-            else:
+
+            if not self.email_config.get('enabled', False):
                 logger.info(f"Email disabled - would send to {user_email}")
                 return {'success': True, 'sent_at': datetime.now().isoformat(), 'note': 'Email disabled in config'}
-                
+
+            # --- Attempt 1: Gmail API (HTTPS, never blocked) ---
+            if self.gmail_api.available:
+                def _api_send():
+                    ok = self.gmail_api.send(msg)
+                    if ok:
+                        logger.info(f"Email sent via Gmail API to {user_email} for ticket {ticket['id']}")
+                    else:
+                        logger.warning(f"Gmail API failed for {user_email}, no SMTP fallback attempted")
+                threading.Thread(target=_api_send, daemon=True).start()
+                return {'success': True, 'sent_at': datetime.now().isoformat(), 'note': 'Sending via Gmail API'}
+
+            # --- Attempt 2 & 3: SMTP fallback (background thread) ---
+            smtp_host = self.email_config['smtp_host']
+            smtp_user = self.email_config['smtp_user']
+            smtp_pass = self.email_config['smtp_password']
+            TIMEOUT = 10
+
+            def _smtp_send():
+                # Try SSL:465
+                try:
+                    ctx = _ssl.create_default_context()
+                    with smtplib.SMTP_SSL(smtp_host, 465, context=ctx, timeout=TIMEOUT) as s:
+                        s.login(smtp_user, smtp_pass)
+                        s.send_message(msg)
+                    logger.info(f"Email sent (SSL:465) to {user_email} for ticket {ticket['id']}")
+                    return
+                except Exception as e1:
+                    logger.warning(f"SSL:465 failed ({e1}), trying STARTTLS:587...")
+                # Try STARTTLS:587
+                try:
+                    with smtplib.SMTP(smtp_host, 587, timeout=TIMEOUT) as s:
+                        s.ehlo(); s.starttls(); s.ehlo()
+                        s.login(smtp_user, smtp_pass)
+                        s.send_message(msg)
+                    logger.info(f"Email sent (STARTTLS:587) to {user_email} for ticket {ticket['id']}")
+                except Exception as e2:
+                    logger.error(f"STARTTLS:587 also failed: {e2}")
+
+            threading.Thread(target=_smtp_send, daemon=True).start()
+            return {'success': True, 'sent_at': datetime.now().isoformat(), 'note': 'Sending via SMTP in background'}
+
         except Exception as e:
-            logger.error(f"Failed to send email: {e}")
+            logger.error(f"Failed to prepare email: {e}")
             return {'success': False, 'error': str(e)}
     
     def _generate_email_html(self, notification: Dict, ticket: Dict, ai_body: Optional[str] = None) -> str:

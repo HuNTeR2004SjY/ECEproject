@@ -71,28 +71,89 @@ document.addEventListener('DOMContentLoaded', function () {
         // Show loading state
         setLoading(true);
 
+        // Reset results to skeleton state
+        showResultsSkeleton();
+
+        let lastTicketId = null;
+        let lastSubject = subject;
+
         try {
-            const response = await fetch('/predict', {
+            const response = await fetch('/predict/stream', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ subject, body })
             });
 
-            const data = await response.json();
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ error: 'Server error' }));
+                alert('Error: ' + (err.error || 'Something went wrong'));
+                setLoading(false);
+                return;
+            }
 
-            if (response.ok) {
-                // Add to history before displaying results
-                addToHistory(subject, data);
-                displayResults(data);
-            } else {
-                alert('Error: ' + (data.error || 'Something went wrong'));
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop(); // keep incomplete chunk
+
+                for (const part of parts) {
+                    if (!part.trim()) continue;
+                    // Parse SSE block
+                    const lines = part.split('\n');
+                    let eventType = 'message';
+                    let eventData = '';
+                    for (const line of lines) {
+                        if (line.startsWith('event:')) eventType = line.slice(6).trim();
+                        else if (line.startsWith('data:')) eventData = line.slice(5).trim();
+                    }
+
+                    try {
+                        const payload = JSON.parse(eventData);
+
+                        if (eventType === 'triage') {
+                            lastTicketId = payload.ticket_id;
+                            displayTriageResults(payload);
+                            // Show solution skeleton while solver runs
+                            setSolutionSolving();
+                        } else if (eventType === 'solution') {
+                            displaySolution(payload);
+                        } else if (eventType === 'done') {
+                            setLoading(false);
+                            // Add to local history now that ticket_id is known
+                            const histEntry = {
+                                id: payload.ticket_id,
+                                subject: lastSubject,
+                                type: document.getElementById('typeValue').textContent || 'Unknown',
+                                status: document.getElementById('solutionBadge') &&
+                                        document.getElementById('solutionBadge').classList.contains('badge-escalated')
+                                        ? 'Escalated' : 'Pending',
+                                solution: document.getElementById('solutionText').innerText || '',
+                                confidence: 0,
+                                timestamp: new Date()
+                            };
+                            ticketHistory.unshift(histEntry);
+                            updateHistoryView();
+                        } else if (eventType === 'error') {
+                            setLoading(false);
+                            document.getElementById('solutionText').textContent = 'Error: ' + (payload.error || 'Unknown error');
+                            document.getElementById('solutionBadge').textContent = 'Error';
+                            document.getElementById('solutionBadge').className = 'solution-badge badge-escalated';
+                        }
+                    } catch (parseErr) {
+                        console.warn('SSE parse error:', parseErr, part);
+                    }
+                }
             }
         } catch (error) {
-            console.error('Error:', error);
+            console.error('Stream error:', error);
             alert('Failed to connect to the server. Please make sure the app is running.');
-        } finally {
             setLoading(false);
         }
     });
@@ -201,35 +262,48 @@ document.addEventListener('DOMContentLoaded', function () {
         submitAnotherBtn.addEventListener('click', submitAnotherTicket);
     }
 
-    function displayResults(data) {
-        // Show results section
+    /** Show the results section with skeleton placeholders before any data arrives */
+    function showResultsSkeleton() {
         resultsSection.style.display = 'block';
-
-        // Scroll to results
         resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-        // Update Solution
+        // Reset classification cards to loading dashes
+        document.getElementById('typeValue').textContent = '—';
+        document.getElementById('typeConfidence').style.width = '0%';
+        document.getElementById('typeConfText').textContent = '0%';
+        document.getElementById('priorityValue').textContent = '—';
+        document.getElementById('priorityValue').className = 'card-value';
+        document.getElementById('priorityConfidence').style.width = '0%';
+        document.getElementById('priorityConfText').textContent = '0%';
+        document.getElementById('queueValue').textContent = '—';
+        document.getElementById('queueConfidence').style.width = '0%';
+        document.getElementById('queueConfText').textContent = '0%';
+        document.getElementById('tagsContainer').innerHTML = '';
+
+        // Solution card — initial skeleton
+        document.getElementById('solutionText').textContent = 'Analysing ticket, please wait...';
+        document.getElementById('solutionBadge').textContent = 'Processing';
+        document.getElementById('solutionBadge').className = 'solution-badge badge-processing';
+        document.getElementById('solutionConfidence').textContent = '—';
+        document.getElementById('solutionAttempts').textContent = '—';
+    }
+
+    /** Show "Solving…" skeleton in solution card after triage is done */
+    function setSolutionSolving() {
         const solutionText = document.getElementById('solutionText');
-        const solutionMethod = document.getElementById('solutionMethod');
-        const solutionConfidence = document.getElementById('solutionConfidence');
+        const badge = document.getElementById('solutionBadge');
+        solutionText.innerHTML = `
+            <span class="solving-pulse">🤖 Generating solution</span>
+            <span class="solving-dots"><span>.</span><span>.</span><span>.</span></span>
+        `;
+        badge.textContent = 'Solving';
+        badge.className = 'solution-badge badge-solving';
+        document.getElementById('solutionConfidence').textContent = '—';
+        document.getElementById('solutionAttempts').textContent = '—';
+    }
 
-        if (data.solution) {
-            solutionText.innerText = data.solution; // Use innerText to preserve line breaks
-            solutionMethod.textContent = data.method === 'direct_retrieval' ? 'Retrieved from Knowledge Base' : 'AI Generated';
-            solutionMethod.className = 'solution-badge ' + (data.method === 'direct_retrieval' ? 'badge-retrieved' : 'badge-generated');
-            solutionConfidence.textContent = data.confidence + '%';
-        } else if (data.escalated) {
-            solutionText.textContent = `All ${data.attempts} attempts failed - Escalating to Human Team`;
-            solutionMethod.textContent = "Escalated to Human";
-            solutionMethod.className = 'solution-badge badge-escalated';
-            solutionConfidence.textContent = "0%";
-            // Optional: You could add a specific class to solutionText to style it differently
-        } else {
-            solutionText.textContent = "No solution could be generated for this ticket.";
-            solutionMethod.textContent = "Failed";
-            solutionConfidence.textContent = "0%";
-        }
-
+    /** Display ONLY the triage classification cards (called as soon as triage event arrives) */
+    function displayTriageResults(data) {
         // Update Type
         document.getElementById('typeValue').textContent = data.type;
         document.getElementById('typeConfidence').style.width = data.type_confidence + '%';
@@ -250,21 +324,51 @@ document.addEventListener('DOMContentLoaded', function () {
         // Update Tags
         const tagsContainer = document.getElementById('tagsContainer');
         tagsContainer.innerHTML = '';
-
         data.tags.forEach((tag, index) => {
             const tagEl = document.createElement('span');
             tagEl.className = 'tag';
-
             const score = data.tag_scores && data.tag_scores[index]
-                ? `<span class="tag-score">${data.tag_scores[index]}%</span>`
-                : '';
-
+                ? `<span class="tag-score">${data.tag_scores[index]}%</span>` : '';
             tagEl.innerHTML = `${tag} ${score}`;
             tagsContainer.appendChild(tagEl);
         });
 
-        // Animate results
+        // Animate classification cards
         animateResults();
+    }
+
+    /** Display ONLY the solution section (called when solution event arrives) */
+    function displaySolution(data) {
+        const solutionText = document.getElementById('solutionText');
+        const solutionBadge = document.getElementById('solutionBadge');
+        const solutionConfidence = document.getElementById('solutionConfidence');
+        const solutionAttempts = document.getElementById('solutionAttempts');
+
+        if (data.solution) {
+            solutionText.innerText = data.solution;
+            solutionBadge.textContent = data.method === 'direct_retrieval' ? 'Retrieved from Knowledge Base' : 'AI Generated';
+            solutionBadge.className = 'solution-badge ' + (data.method === 'direct_retrieval' ? 'badge-retrieved' : 'badge-generated');
+            solutionConfidence.textContent = data.confidence + '%';
+        } else if (data.escalated) {
+            solutionText.textContent = `All ${data.attempts} attempts failed — Escalating to Human Team`;
+            solutionBadge.textContent = 'Escalated to Human';
+            solutionBadge.className = 'solution-badge badge-escalated';
+            solutionConfidence.textContent = '0%';
+        } else {
+            solutionText.textContent = 'No solution could be generated for this ticket.';
+            solutionBadge.textContent = 'Failed';
+            solutionBadge.className = 'solution-badge badge-escalated';
+            solutionConfidence.textContent = '0%';
+        }
+        solutionAttempts.textContent = data.attempts || 1;
+
+        // Pulse-in animation for solution card
+        const card = solutionText.closest('.solution-card');
+        if (card) {
+            card.classList.remove('solution-arrived');
+            void card.offsetWidth;
+            card.classList.add('solution-arrived');
+        }
     }
 
     function animateResults() {

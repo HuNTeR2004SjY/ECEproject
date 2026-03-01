@@ -21,7 +21,7 @@
         }
 
         .nav-item.active {
-            background: rgba(0,0,0,0.05);
+            background: rgba(0, 0, 0, 0.05);
         }
     </style>
 </head>
@@ -35,6 +35,7 @@
                 <h2>ECE Admin</h2>
                 <nav class="navbar-nav">
                     <button class="nav-item active" onclick="switchView('overview')">Overview</button>
+                    <button class="nav-item" onclick="switchView('escalated')">🚨 Escalated Queue</button>
                     <button class="nav-item" onclick="switchView('history')">History</button>
                     <button class="nav-item" onclick="switchView('users')">Users</button>
                     <button class="nav-item" onclick="switchView('settings')">Settings</button>
@@ -81,6 +82,22 @@
                             <p class="stat-value">{{ stats.escalated }}</p>
                         </div>
                     </div>
+                    <div class="stat-card">
+                        <div class="stat-icon icon-yellow"
+                            style="background: rgba(251, 191, 36, 0.15); color: #F59E0B;">🔧</div>
+                        <div class="stat-info">
+                            <h3>In Progress</h3>
+                            <p class="stat-value">{{ stats.in_progress }}</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon icon-green" style="background: rgba(52, 211, 153, 0.15); color: #10B981;">
+                            ✅</div>
+                        <div class="stat-info">
+                            <h3>Resolved</h3>
+                            <p class="stat-value">{{ stats.resolved }}</p>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="recent-activity">
@@ -110,12 +127,26 @@
                                         }}</span></td>
                                 <td>{{ ticket.raised_by }}</td>
                                 <td>
-                                    {% if ticket.corrected %}
+                                    {% if ticket.status == 'resolved' or ticket.corrected %}
                                     <span class="status-resolved"
-                                        style="background: rgba(52, 211, 153, 0.15); color: var(--success); padding: 4px 8px; border-radius: 4px;">Resolved</span>
+                                        style="background: rgba(52, 211, 153, 0.15); color: var(--success); padding: 4px 8px; border-radius: 4px;">✅
+                                        Resolved</span>
+                                    {% elif ticket.status == 'escalated' %}
+                                    <span
+                                        style="background: rgba(239, 68, 68, 0.15); color: #EF4444; padding: 4px 8px; border-radius: 4px;">🚨
+                                        Escalated</span>
+                                    {% elif ticket.status == 'in_progress' %}
+                                    <span
+                                        style="background: rgba(245, 158, 11, 0.15); color: #F59E0B; padding: 4px 8px; border-radius: 4px;">🔧
+                                        In Progress</span>
+                                    {% elif ticket.status == 'auto_closed' %}
+                                    <span
+                                        style="background: rgba(156, 163, 175, 0.15); color: #6B7280; padding: 4px 8px; border-radius: 4px;">⏱
+                                        Auto-Closed</span>
                                     {% else %}
                                     <span class="status-pending"
-                                        style="background: rgba(251, 191, 36, 0.15); color: var(--warning); padding: 4px 8px; border-radius: 4px;">Pending</span>
+                                        style="background: rgba(251, 191, 36, 0.15); color: var(--warning); padding: 4px 8px; border-radius: 4px;">⏳
+                                        Pending</span>
                                     {% endif %}
                                 </td>
                                 <td style="color: var(--text-muted); font-size: 0.9em;">{{ ticket.timestamp }}</td>
@@ -131,6 +162,36 @@
                                 <td colspan="8" style="text-align: center; padding: 20px;">No tickets found.</td>
                             </tr>
                             {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ESCALATED QUEUE SECTION -->
+            <div id="escalated" class="view-section">
+                <div class="section-header">
+                    <h2>Escalated Tickets — Human Resolution Queue</h2>
+                    <p>Tickets the AI could not resolve. Claim and resolve them below.</p>
+                </div>
+                <div class="recent-activity">
+                    <table class="activity-table" id="escalatedTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Subject</th>
+                                <th>Type</th>
+                                <th>Priority</th>
+                                <th>Queue</th>
+                                <th>Raised By</th>
+                                <th>Submitted</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="escalatedTableBody">
+                            <tr>
+                                <td colspan="9">Loading escalated tickets...</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -279,8 +340,8 @@
                     </div>
                     <div class="ticket-solution">
                         <h3>Description</h3>
-                        <p id="detailBody"
-                            style="background: rgba(0,0,0,0.04); padding: 10px; border-radius: 4px;">--</p>
+                        <p id="detailBody" style="background: rgba(0,0,0,0.04); padding: 10px; border-radius: 4px;">--
+                        </p>
                     </div>
                     <div class="ticket-solution" style="margin-top: 20px;">
                         <h3>AI Classification</h3>
@@ -293,9 +354,65 @@
                             <span class="value" id="detailPriority">--</span>
                         </div>
                     </div>
+                    <div class="ticket-solution" style="margin-top: 20px;">
+                        <h3>Resolution Details</h3>
+                        <div id="detailResolutionNotes"
+                            style="background: rgba(0,250,0,0.04); padding: 10px; border-radius: 4px; font-style: italic; margin-bottom: 10px;">
+                            --</div>
+                        <div class="summary-item">
+                            <span class="label">Status Info:</span>
+                            <span class="value" id="detailResolutionStatus">Not yet resolved</span>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="btn-secondary close-modal-btn">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Human Resolution Modal -->
+        <div id="humanResolutionModal" class="modal"
+            style="display: none; align-items: center; justify-content: center; background: rgba(255,255,255,0.4); backdrop-filter: blur(5px);">
+            <div class="modal-content"
+                style="background: var(--bg-card); border: 1px solid var(--border); box-shadow: var(--shadow-xl); border-radius: var(--radius-lg); overflow: hidden; max-width: 600px; width: 90%;">
+                <div class="modal-header"
+                    style="background: rgba(0,0,0,0.03); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
+                    <h2 id="resModalTitle" style="font-size: 1.25rem; font-weight: 600;">Submit Human Resolution -
+                        Ticket #--</h2>
+                    <span class="close-modal"
+                        style="font-size: 1.5rem; cursor: pointer; color: var(--text-secondary);">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="ticket-summary">
+                        <div class="summary-item">
+                            <span class="label">Subject:</span>
+                            <span class="value" id="resSubject">--</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="label">Type / Priority:</span>
+                            <span class="value" id="resTypePriority">--</span>
+                        </div>
+                    </div>
+                    <form id="humanResolutionForm">
+                        <input type="hidden" id="resTicketId">
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label>Resolution Notes</label>
+                            <textarea id="resNotes" rows="4"
+                                style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px;"
+                                required minlength="20"
+                                placeholder="What did you do to resolve this ticket?"></textarea>
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="resSaveKb" checked>
+                            <label for="resSaveKb" style="margin-bottom: 0;">Save this solution to Knowledge Base for
+                                future AI use</label>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button type="submit" class="cta-button" style="flex: 1;">Submit & Notify User</button>
+                            <button type="button" class="btn-secondary close-modal-btn" style="flex: 1;">Cancel</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -343,6 +460,7 @@
 
                 if (viewId === 'users') loadUsers();
                 if (viewId === 'settings') loadDepartments();
+                if (viewId === 'escalated') loadEscalatedTickets();
             }
 
             // --- Users API ---
@@ -485,9 +603,124 @@
                     document.getElementById('detailBody').textContent = ticket.body || 'No description provided.';
                     document.getElementById('detailType').textContent = ticket.pred_type;
                     document.getElementById('detailPriority').textContent = ticket.pred_priority;
+
+                    if (ticket.resolution_notes) {
+                        document.getElementById('detailResolutionNotes').textContent = ticket.resolution_notes;
+                    } else {
+                        document.getElementById('detailResolutionNotes').textContent = '--';
+                    }
+
+                    if (ticket.human_agent && ticket.resolved_at) {
+                        document.getElementById('detailResolutionStatus').textContent = `Resolved by: ${ticket.human_agent} on ${ticket.resolved_at}`;
+                    } else {
+                        document.getElementById('detailResolutionStatus').textContent = 'Not yet resolved';
+                    }
+
                     modal.style.display = 'flex';
                 };
+
             });
+            // --- Escalated Tickets API ---
+            async function loadEscalatedTickets() {
+                const tbody = document.getElementById('escalatedTableBody');
+                try {
+                    const res = await fetch('/api/admin/escalated-tickets');
+                    const data = await res.json();
+
+                    if (data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">No escalated tickets in queue.</td></tr>';
+                        return;
+                    }
+
+                    const currentUser = '{{ user.username }}';
+
+                    tbody.innerHTML = data.map(t => {
+                        let statusBadge = '';
+                        let actionBtn = '';
+
+                        if (t.status === 'escalated' || t.status === 'reopened') {
+                            statusBadge = `<span style="background: rgba(239, 68, 68, 0.15); color: #EF4444; padding: 4px 8px; border-radius: 4px;">🔴 Awaiting Claim</span>`;
+                            actionBtn = `<button class="cta-button" onclick="claimTicket('${t.id}')">Claim Ticket</button>`;
+                        } else if (t.status === 'in_progress') {
+                            statusBadge = `<span style="background: rgba(245, 158, 11, 0.15); color: #F59E0B; padding: 4px 8px; border-radius: 4px;">🟡 In Progress by ${t.human_agent}</span>`;
+
+                            if (t.human_agent === currentUser) {
+                                actionBtn = `<button class="cta-button" style="background: var(--success);" onclick="openResolutionModal('${t.id}', '${t.subject.replace(/'/g, "\\'")}', '${t.pred_type}', '${t.pred_priority}')">Resolve</button>`;
+                            } else {
+                                actionBtn = `<span style="color: var(--text-muted); font-size: 0.9em;">Claimed by ${t.human_agent}</span>`;
+                            }
+                        }
+
+                        return `
+                        <tr>
+                            <td>#${t.id}</td>
+                            <td>${t.subject}</td>
+                            <td><span class="badge badge-${t.pred_type.toLowerCase()}">${t.pred_type}</span></td>
+                            <td><span class="badge badge-${t.pred_priority.toLowerCase()}">${t.pred_priority}</span></td>
+                            <td>${t.pred_queue}</td>
+                            <td>${t.raised_by || 'Unknown'}</td>
+                            <td>${t.timestamp}</td>
+                            <td>${statusBadge}</td>
+                            <td>${actionBtn}</td>
+                        </tr>
+                        `;
+                    }).join('');
+                } catch (e) {
+                    tbody.innerHTML = '<tr><td colspan="9">Error loading escalated tickets</td></tr>';
+                }
+            }
+
+            async function claimTicket(ticketId) {
+                try {
+                    const res = await fetch(`/api/admin/ticket/${ticketId}/claim`, { method: 'POST' });
+                    const data = await res.json();
+                    if (data.success) {
+                        loadEscalatedTickets();
+                    } else {
+                        alert(data.error);
+                    }
+                } catch (e) {
+                    alert('Error claiming ticket');
+                }
+            }
+
+            window.openResolutionModal = function (id, subject, type, priority) {
+                document.getElementById('resModalTitle').textContent = `Submit Human Resolution - Ticket #${id}`;
+                document.getElementById('resTicketId').value = id;
+                document.getElementById('resSubject').textContent = subject;
+                document.getElementById('resTypePriority').textContent = `${type} / ${priority}`;
+                document.getElementById('resNotes').value = '';
+                document.getElementById('humanResolutionModal').style.display = 'flex';
+            };
+
+            document.getElementById('humanResolutionForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const btn = e.target.querySelector('button[type="submit"]');
+                btn.disabled = true;
+                const ticketId = document.getElementById('resTicketId').value;
+
+                try {
+                    const res = await fetch(`/api/admin/ticket/${ticketId}/human-resolve`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            resolution_notes: document.getElementById('resNotes').value,
+                            save_to_kb: document.getElementById('resSaveKb').checked
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('Ticket resolved and user notified!');
+                        document.getElementById('humanResolutionModal').style.display = 'none';
+                        loadEscalatedTickets();
+                    } else {
+                        alert(data.error);
+                    }
+                } catch (err) {
+                    alert('Error submitting resolution');
+                }
+                btn.disabled = false;
+            };
         </script>
 </body>
 
