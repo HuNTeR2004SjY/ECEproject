@@ -30,6 +30,7 @@ from src.models import User, Department
 from explainable_triage import ExplainableTriageWrapper
 from pattern_miner import PatternMiner
 from src.workflow_manager import WorkflowManager
+from jira_integration import JiraIntegration, save_jira_key, get_jira_key
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -100,7 +101,7 @@ def init_solver():
         from src.workflow_manager import WorkflowManager
         # Uses the shared triage and solver
         workflow_manager = WorkflowManager(
-            triage_specialist=solver.triage_specialist if solver else None,
+            triage_specialist=solver.triage if solver else None,
             problem_solver=solver,
             automation_specialist=automation_specialist
         )
@@ -156,6 +157,16 @@ def init_db_schema():
                 created_at TIMESTAMP
             )
         ''')
+        
+        # Create jira_keys table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS jira_keys (
+                ticket_id TEXT PRIMARY KEY,
+                jira_key TEXT NOT NULL,
+                created_at TEXT
+            )
+        ''')
+        
         conn.commit()
         conn.close()
         logger.info("Database schema migrations completed.")
@@ -572,7 +583,58 @@ def predict():
         except Exception as e:
             logger.error(f"Pattern Miner failed during /predict: {e}")
             response['systemic_alert'] = None
-            
+
+        # ── Jira Integration ────────────────────────────────────────────
+        jira_key = None
+        try:
+            jira_key = jira.create_issue(
+                ticket_id   = ticket_id,
+                subject     = subject,
+                body        = body,
+                triage      = result['triage'],
+                explanation = explanation.to_dict() if 'explanation' in locals() else None,
+            )
+            if jira_key:
+                save_jira_key(config.DATABASE_PATH, ticket_id, jira_key)
+                logger.info(f"Jira issue {jira_key} linked to ticket {ticket_id}")
+
+            if jira_key and not result.get('escalated') and result.get('solution'):
+                jira.update_issue_resolved(
+                    jira_key   = jira_key,
+                    solution   = result['solution'],
+                    ticket_id  = ticket_id,
+                    confidence = result.get('confidence', 0.0),
+                )
+
+            if jira_key and result.get('escalated'):
+                jira.update_issue_escalated(
+                    jira_key          = jira_key,
+                    ticket_id         = ticket_id,
+                    escalation_reason = result.get('escalation_reason', ''),
+                )
+
+            if systemic_alert and not systemic_alert.already_known:
+                # Gather Jira keys for all clustered tickets
+                cluster_jira_keys = [
+                    k for k in [
+                        get_jira_key(config.DATABASE_PATH, tid)
+                        for tid in systemic_alert.cluster.ticket_ids
+                    ] if k
+                ]
+                jira.create_systemic_epic(
+                    alert_id   = systemic_alert.alert_id,
+                    severity   = systemic_alert.severity,
+                    summary    = systemic_alert.summary,
+                    ticket_ids = systemic_alert.cluster.ticket_ids,
+                    jira_keys  = cluster_jira_keys,
+                )
+
+        except Exception as jira_err:
+            logger.error(f"Jira integration block failed: {jira_err}")
+        # ── End Jira ─────────────────────────────────────────────────────
+
+        response['jira_key'] = jira_key
+
         return jsonify(response)
         
     except Exception as e:
@@ -1381,6 +1443,54 @@ def escalate_ticket_manual(ticket_id):
         
     except Exception as e:
         logger.error(f"Error escalating ticket: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/jira-status', methods=['GET'])
+@login_required
+def get_jira_status():
+    """
+    Look up the last 20 tickets and their Jira status.
+    """
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    try:
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Get last 20 tickets
+        cursor.execute("SELECT id FROM classified_tickets ORDER BY timestamp DESC LIMIT 20")
+        recent_tickets = cursor.fetchall()
+        
+        linked = []
+        unlinked_count = 0
+        
+        for rt in recent_tickets:
+            tid = rt['id']
+            # Lookup in jira_keys
+            cursor.execute("SELECT jira_key, created_at FROM jira_keys WHERE ticket_id = ?", (tid,))
+            j_row = cursor.fetchone()
+            if j_row:
+                linked.append({
+                    "ticket_id": tid,
+                    "jira_key": j_row['jira_key'],
+                    "created_at": j_row['created_at']
+                })
+            else:
+                unlinked_count += 1
+                
+        conn.close()
+        
+        return jsonify({
+            "linked": linked,
+            "unlinked_count": unlinked_count,
+            "jira_enabled": jira.enabled
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching Jira status: {e}")
         return jsonify({'error': str(e)}), 500
 
 

@@ -122,6 +122,9 @@ document.addEventListener('DOMContentLoaded', function () {
                             displayTriageResults(payload);
                             // Show solution skeleton while solver runs
                             setSolutionSolving();
+
+                            const btnStatusText = document.getElementById('btnStatusText');
+                            if (btnStatusText) btnStatusText.textContent = 'Checking for Solution...';
                         } else if (eventType === 'solution') {
                             displaySolution(payload);
                         } else if (eventType === 'done') {
@@ -132,8 +135,8 @@ document.addEventListener('DOMContentLoaded', function () {
                                 subject: lastSubject,
                                 type: document.getElementById('typeValue').textContent || 'Unknown',
                                 status: document.getElementById('solutionBadge') &&
-                                        document.getElementById('solutionBadge').classList.contains('badge-escalated')
-                                        ? 'Escalated' : 'Pending',
+                                    document.getElementById('solutionBadge').classList.contains('badge-escalated')
+                                    ? 'Escalated' : 'Pending',
                                 solution: document.getElementById('solutionText').innerText || '',
                                 confidence: 0,
                                 timestamp: new Date()
@@ -162,6 +165,11 @@ document.addEventListener('DOMContentLoaded', function () {
         submitBtn.disabled = isLoading;
         btnText.style.display = isLoading ? 'none' : 'inline';
         btnLoading.style.display = isLoading ? 'inline-flex' : 'none';
+
+        if (isLoading) {
+            const btnStatusText = document.getElementById('btnStatusText');
+            if (btnStatusText) btnStatusText.textContent = 'Triaging Ticket...';
+        }
     }
 
     function addToHistory(subject, data) {
@@ -293,7 +301,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const solutionText = document.getElementById('solutionText');
         const badge = document.getElementById('solutionBadge');
         solutionText.innerHTML = `
-            <span class="solving-pulse">🤖 Generating solution</span>
+            <span class="solving-pulse">🤖 Finding solution</span>
             <span class="solving-dots"><span>.</span><span>.</span><span>.</span></span>
         `;
         badge.textContent = 'Solving';
@@ -345,16 +353,19 @@ document.addEventListener('DOMContentLoaded', function () {
         const solutionAttempts = document.getElementById('solutionAttempts');
 
         if (data.solution) {
+            solutionBadge.style.display = 'inline-block';
             solutionText.innerText = data.solution;
-            solutionBadge.textContent = data.method === 'direct_retrieval' ? 'Retrieved from Knowledge Base' : 'AI Generated';
+            solutionBadge.textContent = data.method === 'direct_retrieval' ? 'Retrieved from Knowledge Base' : 'AI Solution';
             solutionBadge.className = 'solution-badge ' + (data.method === 'direct_retrieval' ? 'badge-retrieved' : 'badge-generated');
             solutionConfidence.textContent = data.confidence + '%';
         } else if (data.escalated) {
+            solutionBadge.style.display = 'inline-block';
             solutionText.textContent = `All ${data.attempts} attempts failed — Escalating to Human Team`;
             solutionBadge.textContent = 'Escalated to Human';
             solutionBadge.className = 'solution-badge badge-escalated';
             solutionConfidence.textContent = '0%';
         } else {
+            solutionBadge.style.display = 'inline-block';
             solutionText.textContent = 'No solution could be generated for this ticket.';
             solutionBadge.textContent = 'Failed';
             solutionBadge.className = 'solution-badge badge-escalated';

@@ -242,7 +242,7 @@ EMAIL_CONFIG = {
     'smtp_host': os.getenv('ECE_SMTP_HOST', 'smtp.gmail.com'),
     'smtp_port': int(os.getenv('ECE_SMTP_PORT', 587)),
     'smtp_user': os.getenv('ECE_SMTP_USER', 'eceproject2026@gmail.com'),
-    'smtp_password': os.getenv('ECE_SMTP_PASSWORD', 'uckw lkhh sivd trcs'),
+    'smtp_password': os.getenv('ECE_SMTP_PASSWORD', 'jzox vdvu dmwg avjr'),
     'from_email': os.getenv('ECE_FROM_EMAIL', 'eceproject2026@gmail.com'),
 }
 
@@ -279,4 +279,31 @@ ESCALATION_SLA = {
     'HR': 60,
     'FACILITIES': 120,
     'ENGINEERING': 15
+}
+
+# ── Jira Integration ────────────────────────────────────────────────────
+JIRA = {
+    'base_url':    os.getenv('JIRA_BASE_URL',    'https://eceproject2026.atlassian.net'),
+    'email':       os.getenv('JIRA_EMAIL',       'eceproject2026@gmail.com'),
+    'api_token':   os.getenv('JIRA_API_TOKEN',   'ATATT3xFfGF0Jel98_G9j-Ol7K-XXmYrhgracskDm-KoKYPJye5phlKWndkiWuZm2etsup0Qau9IA1WmURYMGGo8_3wksPzQWnFIMSzbs0_8R0JKZcZMODdZlviR9lVRpApnthAel0-43BWSdTxLr2S9TUipUOagMvaMKPVb-4y-SiBWNk1p6EU=8160D9AE'),
+    'project_key': os.getenv('JIRA_PROJECT_KEY', 'ECE'),
+    'enabled':     os.getenv('JIRA_ENABLED',     'true').lower() == 'true',
+}
+
+# Jira issue type map — ECE type → Jira issue type name
+JIRA_TYPE_MAP = {
+    'Incident':        'Bug',
+    'Problem':         'Bug',
+    'Change Request':  'Task',
+    'Service Request': 'Task',
+    'Feature Request': 'Story',
+    'Question':        'Task',
+    'Complaint':       'Task',
+}
+
+# Jira priority map — ECE priority → Jira priority name
+JIRA_PRIORITY_MAP = {
+    'High':   'High',
+    'Medium': 'Medium',
+    'Low':    'Low',
 }

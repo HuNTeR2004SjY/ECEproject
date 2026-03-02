@@ -485,9 +485,17 @@ class NotificationManager:
                     </div>
                     
                     <p style="text-align: center;">
+                        {f'''
+                        <div style="margin-top: 20px; padding: 15px; background: #fff; border-radius: 6px; text-align: center;">
+                            <h4 style="margin-top:0;">Did this solve your issue?</h4>
+                            <a href="{config.APP_URL}/ticket/confirm/{ticket['id']}?response=yes" style="display: inline-block; padding: 10px 20px; background-color: #10b981; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; margin-right: 10px;">Yes, my issue is resolved</a>
+                            <a href="{config.APP_URL}/ticket/confirm/{ticket['id']}?response=no" style="display: inline-block; padding: 10px 20px; background-color: #ef4444; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">No, I still need help</a>
+                        </div>
+                        ''' if notification.get('event_type') == 'solution_proposed' else f'''
                         <a href="{config.APP_URL}/ticket/{ticket['id']}" class="action-button">
                             View Ticket Details
                         </a>
+                        '''}
                     </p>
                 </div>
                 

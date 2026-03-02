@@ -149,7 +149,7 @@
                             <span class="btn-text">🚀 Analyze & Solve</span>
                             <span class="btn-loading" style="display: none;">
                                 <div class="spinner"></div>
-                                Processing...
+                                <span id="btnStatusText">Triaging Ticket...</span>
                             </span>
                         </button>
                     </form>
@@ -160,26 +160,6 @@
                     <div class="section-header">
                         <h2>🎯 Classification Results</h2>
                         <p>AI-generated predictions for your ticket</p>
-                    </div>
-
-                    <!-- Solution Section -->
-                    <div class="solution-section" id="solutionSection">
-                        <div class="solution-card">
-                            <div class="card-header">
-                                <span class="card-icon">💡</span>
-                                <span class="card-title">Recommended Solution</span>
-                            <span class="solution-badge" id="solutionBadge">Generated</span>
-                            </div>
-                            <div class="solution-content">
-                                <p id="solutionText">Loading solution...</p>
-                            </div>
-                            <div class="solution-footer">
-                                <span class="confidence-label">Confidence: <span
-                                        id="solutionConfidence">0%</span></span>
-                                <span class="confidence-label">Attempts: <span id="solutionAttempts">1</span></span>
-                                <button class="copy-btn" onclick="copySolution()">Copy to Clipboard</button>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="results-grid">
@@ -228,79 +208,95 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- Tags Section -->
-                    <div class="tags-section">
-                        <div class="tags-header">
-                            <span class="card-icon">🏷️</span>
-                            <span>Suggested Tags</span>
-                        </div>
-                        <div class="tags-container" id="tagsContainer">
-                            <!-- Tags will be inserted here -->
-                        </div>
+                    <div class="tags-header">
+                        <span class="card-icon">🏷️</span>
+                        <span>Suggested Tags</span>
                     </div>
-
-                    <!-- Submit Another Button -->
-                    <div class="submit-another-section">
-                        <button type="button" class="submit-another-btn" id="submitAnotherBtn">
-                            ➕ Submit Another Ticket
-                        </button>
+                    <div class="tags-container" id="tagsContainer">
+                        <!-- Tags will be inserted here -->
                     </div>
-                </section>
             </div>
 
-            <!-- History View -->
-            <div id="history-view" class="view-section" style="display: none;">
-                <div class="recent-activity">
-                    <h2>🕓 Ticket History</h2>
-                    <p class="history-subtitle">Your recent tickets</p>
-                    <table class="activity-table" id="historyTable">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Subject</th>
-                                <th>Type</th>
-                                <th>Status</th>
-                                <th>Time</th>
-                            </tr>
-                        </thead>
-                        <tbody id="historyTableBody">
-                            {% if tickets %}
-                            {% for ticket in tickets %}
-                            <tr>
-                                <td>#{{ ticket.id }}</td>
-                                <td>{{ ticket.subject }}</td>
-                                <td><span class="badge badge-{{ ticket.pred_type|lower }}">{{ ticket.pred_type }}</span>
-                                </td>
-                                <td>
-                                    {% if ticket.corrected %}
-                                    <span class="status-resolved">Resolved</span>
-                                    {% else %}
-                                    <span class="status-pending">Pending</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ ticket.timestamp }}</td>
-                            </tr>
-                            {% endfor %}
+            <!-- Solution Section -->
+            <div class="solution-section" id="solutionSection">
+                <div class="solution-card">
+                    <div class="card-header">
+                        <span class="card-icon">💡</span>
+                        <span class="card-title">Recommended Solution</span>
+                        <span class="solution-badge" id="solutionBadge" style="display:none;"></span>
+                    </div>
+                    <div class="solution-content">
+                        <p id="solutionText">Loading solution...</p>
+                    </div>
+                    <div class="solution-footer">
+                        <span class="confidence-label">Confidence: <span id="solutionConfidence">0%</span></span>
+                        <span class="confidence-label">Attempts: <span id="solutionAttempts">1</span></span>
+                        <button class="copy-btn" onclick="copySolution()">Copy to Clipboard</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Another Button -->
+            <div class="submit-another-section">
+                <button type="button" class="submit-another-btn" id="submitAnotherBtn">
+                    ➕ Submit Another Ticket
+                </button>
+            </div>
+            </section>
+    </div>
+
+    <!-- History View -->
+    <div id="history-view" class="view-section" style="display: none;">
+        <div class="recent-activity">
+            <h2>🕓 Ticket History</h2>
+            <p class="history-subtitle">Your recent tickets</p>
+            <table class="activity-table" id="historyTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Subject</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                    {% if tickets %}
+                    {% for ticket in tickets %}
+                    <tr>
+                        <td>#{{ ticket.id }}</td>
+                        <td>{{ ticket.subject }}</td>
+                        <td><span class="badge badge-{{ ticket.pred_type|lower }}">{{ ticket.pred_type }}</span>
+                        </td>
+                        <td>
+                            {% if ticket.corrected %}
+                            <span class="status-resolved">Resolved</span>
                             {% else %}
-                            <tr>
-                                <td colspan="5" style="text-align: center;">No tickets submitted yet.</td>
-                            </tr>
+                            <span class="status-pending">Pending</span>
                             {% endif %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                        </td>
+                        <td>{{ ticket.timestamp }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="5" style="text-align: center;">No tickets submitted yet.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 
-            <!-- Settings View (Placeholder) -->
-            <div id="settings-view" class="view-section" style="display: none;">
-                <div class="placeholder-content">
-                    <h2>System Settings</h2>
-                    <p>Model Configuration & Preferences</p>
-                </div>
-            </div>
+    <!-- Settings View (Placeholder) -->
+    <div id="settings-view" class="view-section" style="display: none;">
+        <div class="placeholder-content">
+            <h2>System Settings</h2>
+            <p>Model Configuration & Preferences</p>
+        </div>
+    </div>
 
-        </main>
+    </main>
     </div>
 
     <!-- Ticket Status Modal -->
