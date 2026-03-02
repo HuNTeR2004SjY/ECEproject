@@ -1,7 +1,8 @@
 import sys
 import os
 import logging
-from google_genai_email import GoogleGenAIEmailGenerator
+from src.google_genai_email import GoogleGenAIEmailGenerator
+from dotenv import load_dotenv
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

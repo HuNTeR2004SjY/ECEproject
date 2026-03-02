@@ -27,10 +27,10 @@ from src.problem_solver_fixed import ProblemSolver
 from src.inference_service_full import TriageSpecialist
 from src.automation_specialist import AutomationSpecialist
 from src.models import User, Department
-from explainable_triage import ExplainableTriageWrapper
-from pattern_miner import PatternMiner
+from src.explainable_triage import ExplainableTriageWrapper
+from src.pattern_miner import PatternMiner
 from src.workflow_manager import WorkflowManager
-from jira_integration import JiraIntegration, save_jira_key, get_jira_key
+from src.jira_integration import JiraIntegration, save_jira_key, get_jira_key
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
