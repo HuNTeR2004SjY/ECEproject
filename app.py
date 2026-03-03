@@ -61,6 +61,7 @@ process_monitor = None
 xai_wrapper = ExplainableTriageWrapper()
 pattern_miner = PatternMiner(db_path=config.DATABASE_PATH)
 workflow_manager = None
+jira_client = JiraIntegration()
 
 
 class LogStatusReporter:
@@ -587,7 +588,7 @@ def predict():
         # ── Jira Integration ────────────────────────────────────────────
         jira_key = None
         try:
-            jira_key = jira.create_issue(
+            jira_key = jira_client.create_issue(
                 ticket_id   = ticket_id,
                 subject     = subject,
                 body        = body,
@@ -599,7 +600,7 @@ def predict():
                 logger.info(f"Jira issue {jira_key} linked to ticket {ticket_id}")
 
             if jira_key and not result.get('escalated') and result.get('solution'):
-                jira.update_issue_resolved(
+                jira_client.update_issue_resolved(
                     jira_key   = jira_key,
                     solution   = result['solution'],
                     ticket_id  = ticket_id,
@@ -607,7 +608,7 @@ def predict():
                 )
 
             if jira_key and result.get('escalated'):
-                jira.update_issue_escalated(
+                jira_client.update_issue_escalated(
                     jira_key          = jira_key,
                     ticket_id         = ticket_id,
                     escalation_reason = result.get('escalation_reason', ''),
@@ -621,7 +622,7 @@ def predict():
                         for tid in systemic_alert.cluster.ticket_ids
                     ] if k
                 ]
-                jira.create_systemic_epic(
+                jira_client.create_systemic_epic(
                     alert_id   = systemic_alert.alert_id,
                     severity   = systemic_alert.severity,
                     summary    = systemic_alert.summary,
@@ -765,6 +766,38 @@ def predict_stream():
 
             except Exception as db_err:
                 logger.error(f"[STREAM] DB save failed: {db_err}")
+
+            # ── Jira Integration for Stream ──────────────────────────────────
+            jira_key = None
+            try:
+                jira_key = jira_client.create_issue(
+                    ticket_id   = ticket_id,
+                    subject     = subject,
+                    body        = body,
+                    triage      = result['triage'],
+                    explanation = None, # Explanation is not generated in stream yet
+                )
+                if jira_key:
+                    save_jira_key(config.DATABASE_PATH, ticket_id, jira_key)
+                    logger.info(f"[STREAM] Jira issue {jira_key} linked to ticket {ticket_id}")
+
+                if jira_key and not result.get('escalated') and result.get('solution'):
+                    jira_client.update_issue_resolved(
+                        jira_key   = jira_key,
+                        solution   = result['solution'],
+                        ticket_id  = ticket_id,
+                        confidence = result.get('confidence', 0.0),
+                    )
+
+                if jira_key and result.get('escalated'):
+                    jira_client.update_issue_escalated(
+                        jira_key          = jira_key,
+                        ticket_id         = ticket_id,
+                        escalation_reason = result.get('escalation_reason', ''),
+                    )
+            except Exception as jira_err:
+                logger.error(f"[STREAM] Jira integration failed: {jira_err}")
+            # ── End Jira ─────────────────────────────────────────────────────
 
             # --- Yield solution event ---
             solution_event = {
@@ -1046,10 +1079,13 @@ def validate_solution():
     
     Request body:
     {
+        "ticket_id": "WEB-XYZ",
         "solution": "The generated solution text",
         "subject": "Original ticket subject",
         "body": "Original ticket body",
-        "triage": { ... triage result ... }
+        "triage": { ... triage result ... },
+        "is_valid": true,
+        "feedback": "..."
     }
     """
     global solver
@@ -1058,6 +1094,48 @@ def validate_solution():
         init_solver()
     
     data = request.json
+    ticket_id = data.get('ticket_id')
+    is_valid_manual = data.get('is_valid') # Frontend sends this directly on manual resolve
+    
+    # If the frontend is directly marking this as resolved via the UI button
+    if is_valid_manual is True and ticket_id:
+        try:
+            conn = sqlite3.connect(config.DATABASE_PATH)
+            conn.execute("UPDATE classified_tickets SET corrected = 1 WHERE id = ?", (ticket_id,))
+            conn.commit()
+            conn.close()
+            
+            # Clean up PII if needed
+            _cleanup_ticket(ticket_id)
+            
+            # ── Update Jira ─────────────────────────────────────────────────────
+            # Since this is a manual resolution from the frontend, we update the ticket in Jira
+            try:
+                # Find Jira key
+                jira_key = get_jira_key(config.DATABASE_PATH, ticket_id)
+                if jira_key:
+                    # Resolve in Jira
+                    jira_client.update_issue_resolved(
+                        jira_key   = jira_key,
+                        solution   = data.get('feedback', 'Resolved by human agent via ECE Dashboard.'),
+                        ticket_id  = ticket_id,
+                        confidence = 1.0, # Human confidence
+                    )
+            except Exception as jira_e:
+                logger.error(f"Error marking Jira issue as resolved for {ticket_id}: {jira_e}")
+            # ── End Jira ────────────────────────────────────────────────────────
+            
+            return jsonify({
+                'approved': True,
+                'feedback': 'Manual resolution accepted.',
+                'status': 'APPROVED'
+            })
+            
+        except Exception as e:
+            logger.error(f"Manual solution validation error: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
+
+    # Old logic for AI validation below -----------------------------------------
     solution = data.get('solution', '')
     subject = data.get('subject', '')
     body = data.get('body', '')
@@ -1084,28 +1162,13 @@ def validate_solution():
         if is_valid:
             # Mark as corrected/resolved
              try:
-                conn = sqlite3.connect(config.DATABASE_PATH)
-                conn.execute("UPDATE classified_tickets SET corrected = 1 WHERE id = ?", (data.get('ticket_id'),)) # Need ticket_id in request or find by subject?
-                # Request body for validate usually has subject/body/solution but might not have ID if called from generic context.
-                # However, our frontend calls it. Let's check frontend.
-                # Frontend (script.js) sends: solution, subject, body, triage.
-                # It does NOT send ticket_id currently?
-                # Wait, we need ticket_id to cleanup!
-                # Update: Frontend needs to send ticket_id.
-                
-                # Assuming we will fix frontend to send ticket_id, or we find it by subject (risky).
-                # Implementation Plan said "Update validate_solution route".
-                # Let's assume passed in `ticket_id` field or we can't clean up easily.
-                # We'll add ticket_id to request in frontend later. For now code defensively.
-                
                 tid = data.get('ticket_id')
                 if tid:
+                    conn = sqlite3.connect(config.DATABASE_PATH)
                     conn.execute("UPDATE classified_tickets SET corrected = 1 WHERE id = ?", (tid,))
                     conn.commit()
                     conn.close()
                     _cleanup_ticket(tid)
-                else:
-                    conn.close()
              except Exception as db_e:
                  logger.error(f"Error marking resolved: {db_e}")
 
