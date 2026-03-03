@@ -215,88 +215,88 @@
                     <div class="tags-container" id="tagsContainer">
                         <!-- Tags will be inserted here -->
                     </div>
+
+                    <!-- Solution Section -->
+                    <div class="solution-section" id="solutionSection">
+                        <div class="solution-card">
+                            <div class="card-header">
+                                <span class="card-icon">💡</span>
+                                <span class="card-title">Recommended Solution</span>
+                                <span class="solution-badge" id="solutionBadge" style="display:none;"></span>
+                            </div>
+                            <div class="solution-content">
+                                <p id="solutionText">Loading solution...</p>
+                            </div>
+                            <div class="solution-footer">
+                                <span class="confidence-label">Confidence: <span
+                                        id="solutionConfidence">0%</span></span>
+                                <span class="confidence-label">Attempts: <span id="solutionAttempts">1</span></span>
+                                <button class="copy-btn" onclick="copySolution()">Copy to Clipboard</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Another Button -->
+                    <div class="submit-another-section">
+                        <button type="button" class="submit-another-btn" id="submitAnotherBtn">
+                            ➕ Submit Another Ticket
+                        </button>
+                    </div>
+                </section>
             </div>
 
-            <!-- Solution Section -->
-            <div class="solution-section" id="solutionSection">
-                <div class="solution-card">
-                    <div class="card-header">
-                        <span class="card-icon">💡</span>
-                        <span class="card-title">Recommended Solution</span>
-                        <span class="solution-badge" id="solutionBadge" style="display:none;"></span>
-                    </div>
-                    <div class="solution-content">
-                        <p id="solutionText">Loading solution...</p>
-                    </div>
-                    <div class="solution-footer">
-                        <span class="confidence-label">Confidence: <span id="solutionConfidence">0%</span></span>
-                        <span class="confidence-label">Attempts: <span id="solutionAttempts">1</span></span>
-                        <button class="copy-btn" onclick="copySolution()">Copy to Clipboard</button>
-                    </div>
+            <!-- History View -->
+            <div id="history-view" class="view-section" style="display: none;">
+                <div class="recent-activity">
+                    <h2>🕓 Ticket History</h2>
+                    <p class="history-subtitle">Your recent tickets</p>
+                    <table class="activity-table" id="historyTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Subject</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            {% if tickets %}
+                            {% for ticket in tickets %}
+                            <tr>
+                                <td>#{{ ticket.id }}</td>
+                                <td>{{ ticket.subject }}</td>
+                                <td><span class="badge badge-{{ ticket.pred_type|lower }}">{{ ticket.pred_type }}</span>
+                                </td>
+                                <td>
+                                    {% if ticket.corrected %}
+                                    <span class="status-resolved">Resolved</span>
+                                    {% else %}
+                                    <span class="status-pending">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ ticket.timestamp }}</td>
+                            </tr>
+                            {% endfor %}
+                            {% else %}
+                            <tr>
+                                <td colspan="5" style="text-align: center;">No tickets submitted yet.</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- Submit Another Button -->
-            <div class="submit-another-section">
-                <button type="button" class="submit-another-btn" id="submitAnotherBtn">
-                    ➕ Submit Another Ticket
-                </button>
+            <!-- Settings View (Placeholder) -->
+            <div id="settings-view" class="view-section" style="display: none;">
+                <div class="placeholder-content">
+                    <h2>System Settings</h2>
+                    <p>Model Configuration & Preferences</p>
+                </div>
             </div>
-            </section>
-    </div>
 
-    <!-- History View -->
-    <div id="history-view" class="view-section" style="display: none;">
-        <div class="recent-activity">
-            <h2>🕓 Ticket History</h2>
-            <p class="history-subtitle">Your recent tickets</p>
-            <table class="activity-table" id="historyTable">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Subject</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Time</th>
-                    </tr>
-                </thead>
-                <tbody id="historyTableBody">
-                    {% if tickets %}
-                    {% for ticket in tickets %}
-                    <tr>
-                        <td>#{{ ticket.id }}</td>
-                        <td>{{ ticket.subject }}</td>
-                        <td><span class="badge badge-{{ ticket.pred_type|lower }}">{{ ticket.pred_type }}</span>
-                        </td>
-                        <td>
-                            {% if ticket.corrected %}
-                            <span class="status-resolved">Resolved</span>
-                            {% else %}
-                            <span class="status-pending">Pending</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ ticket.timestamp }}</td>
-                    </tr>
-                    {% endfor %}
-                    {% else %}
-                    <tr>
-                        <td colspan="5" style="text-align: center;">No tickets submitted yet.</td>
-                    </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- Settings View (Placeholder) -->
-    <div id="settings-view" class="view-section" style="display: none;">
-        <div class="placeholder-content">
-            <h2>System Settings</h2>
-            <p>Model Configuration & Preferences</p>
-        </div>
-    </div>
-
-    </main>
+        </main>
     </div>
 
     <!-- Ticket Status Modal -->
@@ -333,7 +333,12 @@
                         <textarea id="chatInput" placeholder="Type your response or additional details here..."
                             rows="2"></textarea>
                         <button id="sendReplyBtn" class="send-btn">
-                            <span>Send</span> ✈️
+                            <span>Send</span> <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                style="vertical-align: middle; margin-left: 4px;">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
                         </button>
                     </div>
                     <div id="chatLoading" style="display: none; color: #666; font-style: italic; margin-top: 5px;">
@@ -350,8 +355,11 @@
         </div>
     </div>
 
+    <script id="server-tickets-data" type="application/json">
+        {{ tickets | tojson | safe }}
+    </script>
     <script>
-        window.SERVER_TICKETS = {{ tickets | tojson | safe }};
+        window.SERVER_TICKETS = JSON.parse(document.getElementById('server-tickets-data').textContent);
     </script>
     <script src="/static/script.js"></script>
 </body>

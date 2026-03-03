@@ -12,8 +12,8 @@ Integrates with the Triage Specialist to solve tickets using:
 This is the "Problem Solver" agent from your ECE architecture.
 """
 
-import torch
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import requests
+from groq import Groq
 import numpy as np
 import sqlite3
 import pickle
@@ -29,14 +29,7 @@ import sys
 from src.inference_service_full import TriageSpecialist
 import config  # Centralized configuration
 
-# Try to import web search (optional dependency)
-try:
-    from duckduckgo_search import DDGS
-    WEB_SEARCH_AVAILABLE = True
-except ImportError:
-    print("⚠️  duckduckgo-search not installed. Web search disabled.")
-    print("   Install with: pip install duckduckgo-search")
-    WEB_SEARCH_AVAILABLE = False
+
 
 
 class ProblemSolver:
@@ -70,9 +63,7 @@ class ProblemSolver:
         """
         self.db_path = db_path
         self.max_attempts = max_attempts
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        # self.device = torch.device('cpu') # FORCE CPU FOR DEBUGGING
-        print(f"    🔍 Debug: Device set to {self.device}")
+
         
         # Initialize or use provided Triage Specialist
         if triage_specialist is None:
@@ -81,18 +72,18 @@ class ProblemSolver:
         else:
             self.triage = triage_specialist
         
-        # Initialize LLM        # Loading tokenizer
-        print(f"  Loading tokenizer ({model_name})...")
-        self.gen_tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-        self.generator = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(self.device)
-        
-        # Initialize web search if enabled
-        self.web_search_enabled = enable_web_search and WEB_SEARCH_AVAILABLE
-        if self.web_search_enabled:
-            self.web_searcher = DDGS()
-            print("🌐 Web search enabled")
-        else:
-            print("📚 Web search disabled (using internal KB only)")
+        # Groq LLM client (replaces flan-t5)
+        self.groq_client = Groq(api_key=config.GROQ_API_KEY)
+        self.groq_model  = config.GROQ_SOLVER_MODEL
+        print(f"  LLM: Groq {self.groq_model}")
+
+        # Serper web search (replaces DuckDuckGo)
+        self.web_search_enabled = (
+            enable_web_search
+            and config.SERPER_ENABLED
+            and bool(config.SERPER_API_KEY)
+        )
+        print(f"  Web search: {'Serper (Google)' if self.web_search_enabled else 'disabled'}")
         
         print("✅ Problem Solver ready")
     
@@ -190,8 +181,7 @@ class ProblemSolver:
         
         if self.web_search_enabled and retrieval_confidence < 0.85:
             print(f"    🌐 Low KB confidence ({retrieval_confidence:.1%}). initiating RAG Web Search...")
-            web_query = f"{subject} {body[:50]} solution fix"
-            web_results = self._web_search(web_query, max_results=3)
+            web_results = self._web_search(subject, body, max_results=3)
             if web_results:
                 rag_context = "\n".join(web_results)
                 print(f"    ✓ Retrieved {len(web_results)} web sources")
@@ -249,142 +239,111 @@ class ProblemSolver:
         }
     
     
-    def _generate_solution(self, subject: str, body: str, triage: Dict, attempt: int, previous_feedback: str = "", rag_context: str = "", conversation_history: List[Dict] = None) -> str:
+    def _generate_solution(
+        self,
+        subject:              str,
+        body:                 str,
+        triage:               dict,
+        attempt:              int,
+        previous_feedback:    str  = "",
+        rag_context:          str  = "",
+        conversation_history: list = None,
+    ) -> str:
         """
-        Generate solution using Enhanced Answer Generator for better quality.
-        Delegates to the new specialized class which handles structured prompting.
+        Generate a solution using Groq LLaMA 3.3 70B with full RAG context.
+        On retry attempts, the previous validation feedback is included so
+        the model self-corrects.
         """
-        # Lazy initialization of enhanced generator to save resources until needed
-        if not hasattr(self, 'enhanced_generator'):
-            try:
-                from src.enhanced_answer_generator import EnhancedAnswerGenerator
-                print("✨ Initializing Enhanced Answer Generator...")
-                self.enhanced_generator = EnhancedAnswerGenerator(
-                    model_name=config.GENERATOR_MODEL,
-                    device=self.device
-                )
-            except Exception as e:
-                print(f"⚠️ Could not load Enhanced Generator: {e}. Falling back to legacy generation.")
-                self.enhanced_generator = None
-        
-        # Use Enhanced Generator if available
-        if getattr(self, 'enhanced_generator', None):
-            try:
-                ticket_data = {
-                    'subject': subject,
-                    'body': body,
-                    'type': triage['type'],
-                    'priority': triage['priority'],
-                    'queue': triage['queue']
-                }
-                
-                # If retrying, parse feedback for the generator
-                feedback_dict = None
-                previous_sol = None
-                
-                if attempt > 1 and previous_feedback:
-                    # Create a simple feedback object for the enhanced generator
-                    feedback_dict = {
-                        'errors': [previous_feedback],
-                        'overall_score': 50 # Dummy score to trigger improvement logic
-                    }
-                    previous_sol = "Previous attempt rejected" # We don't have the full text easily here, but this triggers the logic
-                
-                print(f"    ✨ Using Enhanced Generator (Attempt {attempt})...")
-                solution = self.enhanced_generator.generate_solution(
-                    ticket=ticket_data,
-                    validation_feedback=feedback_dict,
-                    previous_solution=previous_sol
-                )
-                print(f"    ✓ Generated {len(solution)} characters")
-                return solution
-                
-            except Exception as e:
-                print(f"    ❌ Enhanced Generation Error: {e}. Falling back to legacy.")
-                # Fall through to legacy code below
-        
-        # LEGACY GENERATION (Fallback)
-        # ------------------------------------------------------------------
-        # Get retrieved answer as context
-        retrieved_answer = triage.get('answer', '')
-        answer_source = triage.get('answer_source', {})
-        similarity = answer_source.get('similarity', 0.0)
-        
-        # Get web context if enabled and similarity is low
-        # Get web context (RAG)
-        web_context = rag_context
-        if not web_context and self.web_search_enabled and similarity < config.SOLVER.get('web_search_trigger', 0.70):
-             # Fallback to late-binding search if not passed in
-            print(f"    🌐 Searching web (low similarity: {similarity:.1%})...")
-            web_results = self._web_search(f"{subject} {body[:100]}")
-            if web_results:
-                web_context = f"ADDITIONAL WEB CONTEXT:\n" + "\n".join([f"- {r}" for r in web_results[:2]])
-        
-        # Build tags string
-        tags_str = ", ".join([t['tag'] for t in triage['tags'][:5]])
-        
-        # Build feedback section for retry attempts
-        feedback_section = ""
-        if attempt > 1 and previous_feedback:
-            feedback_section = f"\nPREVIOUS ATTEMPT FEEDBACK (Attempt {attempt-1} was rejected):\n{previous_feedback}\nPlease address this feedback in your new response.\n"
-        
-        # Build history string
-        history_str = ""
-        if conversation_history:
-             history_str = "\nCONVERSATION HISTORY:\n" + "\n".join([f"{msg['sender'].upper()}: {msg['message']}" for msg in conversation_history]) + "\n"
+        # ── Assemble context ─────────────────────────────────────────────
+        kb_answer  = triage.get('answer', '')
+        similarity = triage.get('answer_source', {}).get('similarity', 0.0)
+        tags_str   = ", ".join([t['tag'] for t in triage.get('tags', [])[:5]])
 
-        # Use config's improved prompt template
-        prompt = config.SOLUTION_PROMPT_TEMPLATE.format(
-            subject=subject,
-            body=body[:500],  # More context
-            ticket_type=triage['type'],
-            priority=triage['priority'],
-            queue=triage['queue'],
-            tags=tags_str,
-            similarity=f"{similarity:.0%}",
-            retrieved_answer=retrieved_answer[:500] if retrieved_answer else 'No similar solution found in knowledge base.',
-            web_context=web_context,
-            previous_feedback=feedback_section,
-            history=history_str
+        kb_section = ""
+        if kb_answer and similarity > 0.40:
+            kb_section = (
+                f"\n\n[KNOWLEDGE BASE — {similarity:.0%} match]\n"
+                f"{kb_answer[:600]}"
+            )
+
+        web_section = ""
+        if rag_context:
+            web_section = f"\n\n[WEB SEARCH RESULTS]\n{rag_context[:800]}"
+
+        history_section = ""
+        if conversation_history:
+            lines = [
+                f"{m['sender'].upper()}: {m['message']}"
+                for m in conversation_history
+            ]
+            history_section = "\n\n[CONVERSATION HISTORY]\n" + "\n".join(lines)
+
+        retry_section = ""
+        if attempt > 1 and previous_feedback:
+            retry_section = (
+                f"\n\n[PREVIOUS ATTEMPT {attempt - 1} REJECTED]\n"
+                f"Reason: {previous_feedback}\n"
+                f"You MUST address this feedback in your new response."
+            )
+
+        # ── System prompt ─────────────────────────────────────────────────
+        system_prompt = (
+            "You are an expert enterprise IT support agent. "
+            "Your job is to produce clear, numbered, step-by-step solutions "
+            "for employee support tickets. Rules:\n"
+            "1. Always respond with numbered steps (1. 2. 3. etc.).\n"
+            "2. Start each step with an action verb "
+            "   (Click, Open, Navigate, Run, Verify, Enter, etc.).\n"
+            "3. Be specific — reference the exact system, setting, or "
+            "   command mentioned in the ticket.\n"
+            "4. Do NOT repeat the ticket back. Do NOT add disclaimers.\n"
+            "5. End with a verification step so the user can confirm resolution.\n"
+            "6. If web sources are provided, use them to enrich your answer "
+            "   and cite the source at the end."
         )
-        
-        # Restore real prompt
-        inputs = self.gen_tokenizer(
-            prompt,
-            return_tensors="pt",
-            max_length=config.GENERATION.get('max_input_length', 1024),
-            truncation=True
-        ).to(self.device)
-        
+
+        # ── User prompt ───────────────────────────────────────────────────
+        user_prompt = (
+            f"Ticket Subject: {subject}\n"
+            f"Ticket Description: {body[:600]}\n"
+            f"Type: {triage.get('type')} | "
+            f"Priority: {triage.get('priority')} | "
+            f"Queue: {triage.get('queue')} | "
+            f"Tags: {tags_str}"
+            f"{kb_section}"
+            f"{web_section}"
+            f"{history_section}"
+            f"{retry_section}\n\n"
+            f"Provide a complete, step-by-step resolution:"
+        )
+
+        # ── Call Groq ─────────────────────────────────────────────────────
         try:
-            with torch.no_grad():
-                outputs = self.generator.generate(
-                    input_ids=inputs.input_ids,
-                    attention_mask=inputs.attention_mask, # Pass attention mask
-                    decoder_start_token_id=0, # Hardcoded T5 start token (essential)
-                    
-                    max_length=config.GENERATION.get('max_output_length', 400),
-                    min_length=config.GENERATION.get('min_output_length', 50),
-                    num_beams=config.GENERATION.get('num_beams', 1), # Greedy for stability
-                    temperature=config.GENERATION.get('temperature', 1.0),
-                    do_sample=config.GENERATION.get('do_sample', False),
-                )
-            solution = self.gen_tokenizer.decode(outputs[0], skip_special_tokens=True)
-            print(f"    ✓ Generated {len(solution)} characters")
-            
+            response = self.groq_client.chat.completions.create(
+                model    = self.groq_model,
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user",   "content": user_prompt},
+                ],
+                temperature = config.GROQ_SOLVER_PARAMS['temperature'],
+                max_tokens  = config.GROQ_SOLVER_PARAMS['max_tokens'],
+                top_p       = config.GROQ_SOLVER_PARAMS['top_p'],
+            )
+            solution = response.choices[0].message.content.strip()
+            print(f"    Groq generated {len(solution)} characters "
+                  f"(attempt {attempt})")
+            return solution
+
         except Exception as e:
-            print(f"    ❌ Generation Error: {e}")
-            solution = ""
-        
-        # Fallback if generation failed (empty output or error)
-        if len(solution.strip()) < 10:
-            print("    ⚠️ Generation failed (empty output). Using fallback strategy.")
-            if retrieved_answer:
-                solution = f"Based on our knowledge base:\n\n{retrieved_answer}\n\n(Generated via fallback)"
-            else:
-                solution = "We acknowledge your issue. A support agent will review this ticket shortly as automated resolution was not possible."
-                
-        return solution.strip()
+            print(f"    Groq generation failed: {e}")
+            # Graceful fallback — return a generic structured response
+            return (
+                f"1. Review the issue described: {subject}\n"
+                f"2. Check relevant system settings and logs.\n"
+                f"3. Attempt to reproduce the issue in a test environment.\n"
+                f"4. If unresolved, escalate to your {triage.get('queue', 'support')} team.\n"
+                f"5. Verify resolution by confirming the issue no longer occurs."
+            )
     
     def _validate_solution(self, solution: str, subject: str, body: str, triage: Dict) -> Tuple[bool, str]:
         """
@@ -411,18 +370,55 @@ class ProblemSolver:
         # If we get here, solution is valid
         return True, "Solution meets quality standards."
     
-    def _web_search(self, query: str, max_results: int = 2) -> List[str]:
-        """Search web for additional context (optional feature)."""
+    def _web_search(self, subject: str, body: str, max_results: int = 3) -> list:
+        """
+        Search Google via Serper API for relevant support articles.
+        Builds a precise query from the ticket's key terms rather than
+        using the raw subject/body directly.
+        Returns a list of plain-text result strings.
+        """
         if not self.web_search_enabled:
             return []
-        
         try:
-            results = self.web_searcher.text(query, max_results=max_results)
-            if not results:
-                return []
-            return [f"{r['title']}: {r['body'][:150]}..." for r in results]
+            # Build a targeted query:
+            # Extract error codes if present (e.g. "Error 403", "0x80070005")
+            import re
+            error_codes = re.findall(
+                r'\b(?:error|code|exception)\s*[:#]?\s*([0-9a-fx]+)\b',
+                f"{subject} {body}",
+                re.IGNORECASE
+            )
+            if error_codes:
+                query = f"{subject} {error_codes[0]} fix solution"
+            else:
+                # Use subject + first meaningful noun phrase from body
+                query = f"{subject} how to fix enterprise IT support"
+
+            response = requests.post(
+                "https://google.serper.dev/search",
+                headers={
+                    "X-API-KEY": config.SERPER_API_KEY,
+                    "Content-Type": "application/json",
+                },
+                json={"q": query, "num": max_results},
+                timeout=5,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            results = []
+            for item in data.get("organic", [])[:max_results]:
+                title   = item.get("title", "")
+                snippet = item.get("snippet", "")
+                link    = item.get("link", "")
+                if snippet:
+                    results.append(f"Source: {title}\n{snippet}\nURL: {link}")
+
+            print(f"    Serper returned {len(results)} results for: {query[:60]}")
+            return results
+
         except Exception as e:
-            print(f"    ⚠️  Web search error: {e}")
+            print(f"    Web search failed: {e}")
             return []
     
     def save_solution(self, ticket_id: str, subject: str, body: str, 
@@ -467,7 +463,7 @@ if __name__ == "__main__":
     # Initialize Problem Solver (it will initialize Triage Specialist internally)
     solver = ProblemSolver(
         model_name="google/flan-t5-base",  # Faster than large
-        enable_web_search=False,  # Disable for internal IT tickets
+        enable_web_search=True,  # Changed to True to test Serper
         max_attempts=3
     )
     

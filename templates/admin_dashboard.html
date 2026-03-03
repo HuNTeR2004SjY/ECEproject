@@ -34,11 +34,11 @@
                 <div class="logo-icon">🛡️</div>
                 <h2>ECE Admin</h2>
                 <nav class="navbar-nav">
-                    <button class="nav-item active" onclick="switchView('overview')">Overview</button>
-                    <button class="nav-item" onclick="switchView('escalated')">🚨 Escalated Queue</button>
-                    <button class="nav-item" onclick="switchView('history')">History</button>
-                    <button class="nav-item" onclick="switchView('users')">Users</button>
-                    <button class="nav-item" onclick="switchView('settings')">Settings</button>
+                    <button class="nav-item active" onclick="switchView('overview', this)">Overview</button>
+                    <button class="nav-item" onclick="switchView('escalated', this)">🚨 Escalated Queue</button>
+                    <button class="nav-item" onclick="switchView('history', this)">History</button>
+                    <button class="nav-item" onclick="switchView('users', this)">Users</button>
+                    <button class="nav-item" onclick="switchView('settings', this)">Settings</button>
                 </nav>
             </div>
             <div class="navbar-right">
@@ -153,7 +153,8 @@
                                 <td>
                                     <button class="nav-item"
                                         style="font-size: 0.8rem; padding: 4px 8px; border: 1px solid var(--border); background: var(--bg-card);"
-                                        onclick='viewTicket({{ ticket|tojson }})'>View</button>
+                                        data-ticket="{{ ticket|tojson|forceescape }}"
+                                        onclick="viewTicket(JSON.parse(this.getAttribute('data-ticket')))">View</button>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -456,7 +457,7 @@
                 document.getElementById(viewId).classList.add('active');
 
                 document.querySelectorAll('.navbar-nav .nav-item').forEach(el => el.classList.remove('active'));
-                event.target.classList.add('active');
+                if (btn) btn.classList.add('active');
 
                 if (viewId === 'users') loadUsers();
                 if (viewId === 'settings') loadDepartments();

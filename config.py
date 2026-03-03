@@ -286,7 +286,7 @@ JIRA = {
     'base_url':    os.getenv('JIRA_BASE_URL',    'https://eceproject2026.atlassian.net'),
     'email':       os.getenv('JIRA_EMAIL',       'eceproject2026@gmail.com'),
     'api_token':   os.getenv('JIRA_API_TOKEN',   'ATATT3xFfGF0Jel98_G9j-Ol7K-XXmYrhgracskDm-KoKYPJye5phlKWndkiWuZm2etsup0Qau9IA1WmURYMGGo8_3wksPzQWnFIMSzbs0_8R0JKZcZMODdZlviR9lVRpApnthAel0-43BWSdTxLr2S9TUipUOagMvaMKPVb-4y-SiBWNk1p6EU=8160D9AE'),
-    'project_key': os.getenv('JIRA_PROJECT_KEY', 'ECE'),
+    'project_key': os.getenv('JIRA_PROJECT_KEY', 'KAN'),
     'enabled':     os.getenv('JIRA_ENABLED',     'true').lower() == 'true',
 }
 
@@ -307,3 +307,16 @@ JIRA_PRIORITY_MAP = {
     'Medium': 'Medium',
     'Low':    'Low',
 }
+
+# ── Groq / LLM Upgrade ─────────────────────────────────────────────────
+GROQ_SOLVER_MODEL = os.getenv('GROQ_SOLVER_MODEL', 'llama-3.3-70b-versatile')
+
+GROQ_SOLVER_PARAMS = {
+    'temperature': 0.3,
+    'max_tokens':  1024,
+    'top_p':       0.9,
+}
+
+# ── Serper Web Search ───────────────────────────────────────────────────
+SERPER_API_KEY = os.getenv('SERPER_API_KEY', '')
+SERPER_ENABLED = os.getenv('SERPER_ENABLED', 'true').lower() == 'true'
