@@ -318,5 +318,5 @@ GROQ_SOLVER_PARAMS = {
 }
 
 # ── Serper Web Search ───────────────────────────────────────────────────
-SERPER_API_KEY = os.getenv('SERPER_API_KEY', '')
+SERPER_API_KEY = os.getenv('SERPER_API_KEY', 'b747f57b54bc2599969b36782809e08f689299fe')
 SERPER_ENABLED = os.getenv('SERPER_ENABLED', 'true').lower() == 'true'
