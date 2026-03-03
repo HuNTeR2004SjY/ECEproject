@@ -366,39 +366,45 @@ class NotificationManager:
                     if ok:
                         logger.info(f"Email sent via Gmail API to {user_email} for ticket {ticket['id']}")
                     else:
-                        logger.warning(f"Gmail API failed for {user_email}, no SMTP fallback attempted")
+                        logger.warning(f"Gmail API failed for {user_email}, falling back to SMTP...")
+                        self._smtp_send(msg, user_email, ticket)
                 threading.Thread(target=_api_send, daemon=True).start()
                 return {'success': True, 'sent_at': datetime.now().isoformat(), 'note': 'Sending via Gmail API'}
 
             # --- Attempt 2 & 3: SMTP fallback (background thread) ---
-            smtp_host = self.email_config['smtp_host']
-            smtp_user = self.email_config['smtp_user']
-            smtp_pass = self.email_config['smtp_password']
-            TIMEOUT = 10
-
-            def _smtp_send():
-                # Try SSL:465
-                try:
-                    ctx = _ssl.create_default_context()
-                    with smtplib.SMTP_SSL(smtp_host, 465, context=ctx, timeout=TIMEOUT) as s:
-                        s.login(smtp_user, smtp_pass)
-                        s.send_message(msg)
-                    logger.info(f"Email sent (SSL:465) to {user_email} for ticket {ticket['id']}")
-                    return
-                except Exception as e1:
-                    logger.warning(f"SSL:465 failed ({e1}), trying STARTTLS:587...")
-                # Try STARTTLS:587
-                try:
-                    with smtplib.SMTP(smtp_host, 587, timeout=TIMEOUT) as s:
-                        s.ehlo(); s.starttls(); s.ehlo()
-                        s.login(smtp_user, smtp_pass)
-                        s.send_message(msg)
-                    logger.info(f"Email sent (STARTTLS:587) to {user_email} for ticket {ticket['id']}")
-                except Exception as e2:
-                    logger.error(f"STARTTLS:587 also failed: {e2}")
-
-            threading.Thread(target=_smtp_send, daemon=True).start()
+            threading.Thread(target=self._smtp_send, args=(msg, user_email, ticket), daemon=True).start()
             return {'success': True, 'sent_at': datetime.now().isoformat(), 'note': 'Sending via SMTP in background'}
+
+        except Exception as e:
+            logger.error(f"Failed to prepare email: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def _smtp_send(self, msg, user_email, ticket):
+        smtp_host = self.email_config['smtp_host']
+        smtp_user = self.email_config['smtp_user']
+        smtp_pass = self.email_config['smtp_password']
+        TIMEOUT = 10
+
+        # Try SSL:465
+        import ssl as _ssl
+        try:
+            ctx = _ssl.create_default_context()
+            with smtplib.SMTP_SSL(smtp_host, 465, context=ctx, timeout=TIMEOUT) as s:
+                s.login(smtp_user, smtp_pass)
+                s.send_message(msg)
+            logger.info(f"Email sent (SSL:465) to {user_email} for ticket {ticket['id']}")
+            return
+        except Exception as e1:
+            logger.warning(f"SSL:465 failed ({e1}), trying STARTTLS:587...")
+        # Try STARTTLS:587
+        try:
+            with smtplib.SMTP(smtp_host, 587, timeout=TIMEOUT) as s:
+                s.ehlo(); s.starttls(); s.ehlo()
+                s.login(smtp_user, smtp_pass)
+                s.send_message(msg)
+            logger.info(f"Email sent (STARTTLS:587) to {user_email} for ticket {ticket['id']}")
+        except Exception as e2:
+            logger.error(f"STARTTLS:587 also failed: {e2}")
 
         except Exception as e:
             logger.error(f"Failed to prepare email: {e}")
