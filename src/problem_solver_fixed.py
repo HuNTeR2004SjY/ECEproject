@@ -67,7 +67,7 @@ class ProblemSolver:
         
         # Initialize or use provided Triage Specialist
         if triage_specialist is None:
-            print("🔧 Initializing Triage Specialist...")
+            print("[init] Initializing Triage Specialist...")
             self.triage = TriageSpecialist(db_path=db_path)
         else:
             self.triage = triage_specialist
@@ -85,7 +85,7 @@ class ProblemSolver:
         )
         print(f"  Web search: {'Serper (Google)' if self.web_search_enabled else 'disabled'}")
         
-        print("✅ Problem Solver ready")
+        print("[done] Problem Solver ready")
     
     def solve(self, subject: str, body: str, ticket_id: Optional[str] = None, conversation_history: List[Dict] = None) -> Dict:
         """
@@ -107,7 +107,7 @@ class ProblemSolver:
         print('=' * 80)
         
         # Step 1: Get triage classification
-        print("\n📋 Step 1: Triage Classification")
+        print("\n[info] Step 1: Triage Classification")
         triage_result = self.triage.predict(
             subject=subject,
             body=body,
@@ -125,7 +125,7 @@ class ProblemSolver:
         
         # Only use direct retrieval if NO conversation history exists (because history changes context)
         if not conversation_history and retrieval_confidence >= direct_threshold:
-            print(f"\n✅ High similarity match found ({retrieval_confidence:.1%})")
+            print(f"\n[done] High similarity match found ({retrieval_confidence:.1%})")
             print("   Using retrieved answer directly (no generation needed)")
             return {
                 'success': True,
@@ -152,7 +152,7 @@ class ProblemSolver:
         is_hardware_queue = triage_result['queue'] in ['Facilities', 'Hardware Support', 'Assets']
         
         if is_hardware or is_hardware_queue:
-            print(f"\n🚨 Detected Physical/Hardware Issue")
+            print(f"\n[alert] Detected Physical/Hardware Issue")
             print(f"   Reason: Keywords={is_hardware}, Queue={is_hardware_queue}")
             
             # For hardware, we verify if there's a simple fix (e.g. 'plug it in') 
@@ -170,7 +170,7 @@ class ProblemSolver:
 
         # Step 3: Attempt solution with RAG (Web Search + GenAI)
         # ----------------------------------------------------
-        print(f"\n🔄 Step 3: Solution Generation (max {self.max_attempts} attempts)")
+        print(f"\n[info] Step 3: Solution Generation (max {self.max_attempts} attempts)")
         
         previous_feedback = ""
         last_solution = ""
@@ -180,7 +180,7 @@ class ProblemSolver:
         retrieval_confidence = triage_result.get('answer_source', {}).get('similarity', 0.0)
         
         if self.web_search_enabled and retrieval_confidence < 0.85:
-            print(f"    🌐 Low KB confidence ({retrieval_confidence:.1%}). initiating RAG Web Search...")
+            print(f"    [web] Low KB confidence ({retrieval_confidence:.1%}). initiating RAG Web Search...")
             web_results = self._web_search(subject, body, max_results=3)
             if web_results:
                 rag_context = "\n".join(web_results)
@@ -210,7 +210,7 @@ class ProblemSolver:
             )
             
             if is_valid:
-                print(f"  ✅ Solution validated successfully")
+                print(f"  [done] Solution validated successfully")
                 return {
                     'success': True,
                     'solution': solution,
@@ -221,13 +221,13 @@ class ProblemSolver:
                     'triage': triage_result
                 }
             else:
-                print(f"  ⚠️  Validation failed: {validation_feedback}")
+                print(f"  [warn] Validation failed: {validation_feedback}")
                 previous_feedback = validation_feedback
                 if attempt < self.max_attempts:
-                    print(f"  🔄 Will retry with feedback: {validation_feedback}")
+                    print(f"  [retry] Will retry with feedback: {validation_feedback}")
         
         # All attempts failed - escalate
-        print(f"\n🚨 All {self.max_attempts} attempts failed - Escalating")
+        print(f"\n[alert] All {self.max_attempts} attempts failed - Escalating")
         return {
             'success': False,
             'solution': f"[Escalated] {last_solution}" if last_solution else None,
@@ -448,7 +448,7 @@ class ProblemSolver:
         conn.commit()
         conn.close()
         
-        print(f"💾 Solution saved to learning buffer")
+        print(f"[save] Solution saved to learning buffer")
 
 
 # ============================================================================
@@ -481,7 +481,7 @@ if __name__ == "__main__":
     )
     
     if result1['success']:
-        print(f"\n✅ SOLUTION GENERATED:")
+        print(f"\n[done] SOLUTION GENERATED:")
         print(f"   Confidence: {result1['confidence']:.1%}")
         print(f"   Attempts: {result1['attempts']}")
         print(f"\n   {result1['solution']}")
@@ -494,7 +494,7 @@ if __name__ == "__main__":
                               "My username is jsmith@company.com. Please help urgently.",
                               result1['solution'], result1)
     else:
-        print(f"\n🚨 ESCALATED TO HUMAN TEAM")
+        print(f"\n[alert] ESCALATED TO HUMAN TEAM")
         print(f"   Reason: {result1['escalation_reason']}")
         print(f"   Triage info for human agent:")
         print(f"     Type: {result1['triage']['type']}")
@@ -514,7 +514,7 @@ if __name__ == "__main__":
     )
     
     if result2['success']:
-        print(f"\n✅ SOLUTION GENERATED:")
+        print(f"\n[done] SOLUTION GENERATED:")
         print(f"   {result2['solution'][:200]}...")
     
     print("\n" + "="*80)

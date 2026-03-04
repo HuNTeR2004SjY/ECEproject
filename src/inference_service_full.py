@@ -103,7 +103,7 @@ class TriageSpecialist:
         self.db_path = db_path
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        print(f"🔧 Loading Triage Specialist on {self.device}...")
+        print(f"[init] Loading Triage Specialist on {self.device}...")
         
         # Load config
         with open(self.model_dir / 'config.json', 'r') as f:
@@ -153,7 +153,7 @@ class TriageSpecialist:
         # Load knowledge base embeddings (if available)
         self._load_knowledge_base()
         
-        print("✅ Triage Specialist ready")
+        print("[done] Triage Specialist ready")
     
     def _load_knowledge_base(self):
         """Load or create knowledge base embeddings for retrieval."""
@@ -197,13 +197,13 @@ class TriageSpecialist:
                             self.kb_answers.extend(valid_df['answer'].tolist())
                             print(f"  Loaded {len(valid_df)} answers from processed tickets CSV")
                 except (MemoryError, OSError) as mem_err:
-                     print(f"  ⚠️ System out of memory while loading KB: {mem_err}. Continuing with empty KB.")
+                     print(f"  [warn] System out of memory while loading KB: {mem_err}. Continuing with empty KB.")
                 except Exception as ex:
-                    print(f"  ⚠️ Could not load CSV data: {ex}")
+                    print(f"  [warn] Could not load CSV data: {ex}")
             
             conn.close()
         except Exception as e:
-            print(f"  ⚠️ Could not load knowledge base: {e}")
+            print(f"  [warn] Could not load knowledge base: {e}")
     
     def _smart_truncate(self, subject: str, body: str, max_len: int = 512) -> str:
         """Truncate text while preserving important parts."""
@@ -372,7 +372,7 @@ if __name__ == "__main__":
         retrieve_answer=True
     )
     
-    print("\n📋 Classification Result:")
+    print("\n[info] Classification Result:")
     print(f"  Type: {result['type']} ({result['type_confidence']:.1%})")
     print(f"  Priority: {result['priority']} ({result['priority_confidence']:.1%})")
     print(f"  Queue: {result['queue']} ({result['queue_confidence']:.1%})")

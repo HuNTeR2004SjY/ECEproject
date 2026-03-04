@@ -179,7 +179,7 @@ class JiraIntegration:
                 
                 for t in transitions:
                     name = t.get('name', '').lower()
-                    if name in ['done', 'resolve issue', 'resolved', 'closed']:
+                    if name in ['to do', 'open']:
                         target_id = t.get('id')
                         break
                         

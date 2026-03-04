@@ -6,7 +6,7 @@ Generates professional email content using Google's Gemini models.
 """
 
 import logging
-import google.generativeai as genai
+from google import genai
 from typing import Dict, Optional
 import config
 
@@ -17,24 +17,24 @@ class GoogleGenAIEmailGenerator:
     Generates email content using Google's Generative AI.
     """
     
-    def __init__(self, api_key: Optional[str] = None, model_name: str = 'gemini-pro'):
+    def __init__(self, api_key: Optional[str] = None, model_name: str = 'gemini-1.5-flash'):
         """
         Initialize the generator.
         
         Args:
             api_key: Google API Key (optional, defaults to config)
-            model_name: Model to use (default: gemini-pro)
+            model_name: Model to use (default: gemini-1.5-flash)
         """
         self.api_key = api_key or config.GOOGLE_API_KEY
-        self.model_name = model_name or config.GENAI_EMAIL_MODEL
+        # Force a valid model if the config still has the old gemini-pro
+        self.model_name = 'gemini-1.5-flash' if (not config.GENAI_EMAIL_MODEL or config.GENAI_EMAIL_MODEL == 'gemini-pro') else config.GENAI_EMAIL_MODEL
         
         if not self.api_key:
             logger.warning("GOOGLE_API_KEY not found. Email generation will be disabled.")
             self.enabled = False
         else:
             try:
-                genai.configure(api_key=self.api_key)
-                self.model = genai.GenerativeModel(self.model_name)
+                self.client = genai.Client(api_key=self.api_key)
                 self.enabled = True
                 logger.info(f"Google GenAI Email Generator initialized with model {self.model_name}")
             except Exception as e:
@@ -84,7 +84,11 @@ class GoogleGenAIEmailGenerator:
             EMAIL BODY (HTML):
             """
             
-            response = self.model.generate_content(prompt)
+            # Using the new genai client syntax
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+            )
             return response.text
             
         except Exception as e:

@@ -68,3 +68,11 @@ data/*.sqlite
 data/*.csv
 trained_model/*.pth
 Project Context/*.pdf
+
+# Config
+config/
+config.py
+config.yaml
+config.json
+.env
+token.json
