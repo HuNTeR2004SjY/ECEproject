@@ -74,6 +74,7 @@ automation_specialist = None
 xai_wrapper = ExplainableTriageWrapper()
 pattern_miner = PatternMiner(db_path=config.DATABASE_PATH)
 workflow_manager = None
+process_monitor = None
 jira_client = JiraIntegration()
 slack = SlackIntegration()
 
