@@ -492,7 +492,7 @@ def predict():
                 pass
             
             user_id_for_ticket = str(current_user.id)
-            user_slack_id = current_user.slack_id # Assuming current_user has slack_id
+            user_slack_id = getattr(current_user, 'slack_id', None) # Assuming current_user has slack_id
         
         # Format: [CMP][UserID][SEQ]
         # Pad sequence to 4 digits? "sequence of no" -> imply just number or padded?
@@ -799,7 +799,7 @@ def predict_stream():
     user_company_id = current_user.company_id if user_authenticated else None
     user_id_str = str(current_user.id) if user_authenticated else "unknown"
     user_email = current_user.email if user_authenticated else "eceproject2026+unknown@gmail.com"
-    user_slack_id = current_user.slack_id if user_authenticated else None
+    user_slack_id = getattr(current_user, 'slack_id', None) if user_authenticated else None
 
     def generate():
         try:
