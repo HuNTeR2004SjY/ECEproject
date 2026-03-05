@@ -63,11 +63,13 @@ venv.bak/
 
 # Project-specific ignores
 cloudflared.exe
-data/*.db
-data/*.sqlite
-data/*.csv
-trained_model/*.pth
+*.db
+*.sqlite
+data/
+trained_model/
 Project Context/*.pdf
+quality_report.json
+.DS_Store
 
 # Config
 config/

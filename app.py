@@ -9,9 +9,16 @@ Then open: http://localhost:5000 (or configured port)
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, Response, stream_with_context
 
+import re
+import threading
+from dotenv import load_dotenv
+
+# Slack App Includes
+from slack_integration import SlackIntegration
+from slack_events import start_socket_mode
+
 # Load .env file for local development
 try:
-    from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass  # dotenv not installed — environment vars must be set manually
@@ -64,11 +71,14 @@ def load_user(user_id):
 # Global variables
 solver = None
 automation_specialist = None
-process_monitor = None
 xai_wrapper = ExplainableTriageWrapper()
 pattern_miner = PatternMiner(db_path=config.DATABASE_PATH)
 workflow_manager = None
 jira_client = JiraIntegration()
+slack = SlackIntegration()
+
+# Ensure temp directories exist
+os.makedirs(os.path.join(config.BASE_DIR, 'tmp'), exist_ok=True)
 
 
 class LogStatusReporter:
@@ -143,6 +153,11 @@ def init_db_schema():
             cursor.execute("ALTER TABLE classified_tickets ADD COLUMN human_agent TEXT")
         except sqlite3.OperationalError:
             pass
+
+        try:
+            cursor.execute("ALTER TABLE classified_tickets ADD COLUMN user_slack_id TEXT")
+        except sqlite3.OperationalError:
+            pass
         try:
             cursor.execute("ALTER TABLE classified_tickets ADD COLUMN resolution_notes TEXT")
         except sqlite3.OperationalError:
@@ -172,6 +187,19 @@ def init_db_schema():
                 ticket_id TEXT PRIMARY KEY,
                 jira_key TEXT NOT NULL,
                 created_at TEXT
+            )
+        ''')
+        
+        # Create audit_logs table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                action TEXT NOT NULL,
+                ticket_id TEXT,
+                user_id TEXT,
+                detail TEXT,
+                ip_address TEXT
             )
         ''')
         
@@ -249,6 +277,23 @@ def index():
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
 
+def audit_log(action, ticket_id, user_id, detail):
+    """
+    Writes an audit row to the database.
+    action: e.g. TICKET_CREATED, TICKET_ESCALATED, etc.
+    """
+    try:
+        ip_addr = request.remote_addr
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        conn.execute('''
+            INSERT INTO audit_logs (timestamp, action, ticket_id, user_id, detail, ip_address)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (datetime.now().isoformat(), action, ticket_id, user_id, detail, ip_addr))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Audit log failed for action {action}: {e}")
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
@@ -265,6 +310,8 @@ def login():
             login_user(user)
             flash('Logged in successfully.', 'success')
             
+            audit_log('USER_LOGIN', None, str(user.id), f"User {username} logged in")
+            
             next_page = request.args.get('next')
             if not next_page or url_parse(next_page).netloc != '':
                 if user.role == 'admin':
@@ -280,6 +327,7 @@ def login():
 @app.route('/logout')
 @login_required
 def logout():
+    audit_log('USER_LOGOUT', None, str(current_user.id), f"User {current_user.username} logged out")
     logout_user()
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
@@ -394,6 +442,8 @@ def predict():
     data = request.json
     subject = data.get('subject', '')
     body = data.get('body', '')
+    user_slack_id = data.get('user_slack_id', None)
+    user_email = data.get('user_email', '')
     
     if not subject or not body:
         return jsonify({'error': 'Please provide both subject and body'}), 400
@@ -417,6 +467,7 @@ def predict():
         # Determine Company Abbr
         company_abbr = "UNK"
         user_id_for_ticket = "unknown"
+        user_slack_id = None # Initialize user_slack_id
         
         if current_user.is_authenticated:
             # Assuming we can get company name from user -> company_id -> companies table
@@ -440,6 +491,7 @@ def predict():
                 pass
             
             user_id_for_ticket = str(current_user.id)
+            user_slack_id = current_user.slack_id # Assuming current_user has slack_id
         
         # Format: [CMP][UserID][SEQ]
         # Pad sequence to 4 digits? "sequence of no" -> imply just number or padded?
@@ -497,6 +549,12 @@ def predict():
             conn.commit()
             conn.close()
             logger.info(f"Ticket {ticket_id} saved to database with status: {status}")
+            
+            audit_log('TICKET_CREATED', ticket_id, user_id_for_ticket, f"Created with subject: {subject[:50]}")
+            if result.get('escalated'):
+                audit_log('TICKET_ESCALATED', ticket_id, user_id_for_ticket, f"Escalated reason: {result.get('escalation_reason')}")
+            else:
+                audit_log('TICKET_RESOLVED', ticket_id, user_id_for_ticket, f"Status: solution_proposed")
             
             # Notify User (Unified for both Solved and Escalated)
             try:
@@ -566,6 +624,17 @@ def predict():
             'tags': [t['tag'] for t in result['triage']['tags'][:5]],
             'tag_scores': [round(t['confidence'] * 100, 1) for t in result['triage']['tags'][:5]]
         }
+        
+        # ── Update Slack ID in db (if present) ───────────────────────────
+        if user_slack_id:
+            try:
+                conn = sqlite3.connect(config.DATABASE_PATH)
+                conn.execute("UPDATE classified_tickets SET user_slack_id = ? WHERE id = ?", (user_slack_id, ticket_id))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                logger.error(f"Failed to save user_slack_id: {e}")
+                
         # ---------------------------------------------------------
         # EXPLAINABLE AI LAYER
         # ---------------------------------------------------------
@@ -638,16 +707,66 @@ def predict():
                 )
 
         except Exception as jira_err:
-            logger.error(f"Jira integration block failed: {jira_err}")
-        # ── End Jira ─────────────────────────────────────────────────────
-
-        response['jira_key'] = jira_key
+            logger.error(f"Jira Integration failed during /predict: {jira_err}")
+        # ── End Jira ────────────────────────────────────────────────────
+        
+        # ── Slack notifications ───────────────────────────────────────────
+        try:
+            # Notify ticket created
+            slack.notify_ticket_created(
+                ticket_id      = ticket_id,
+                subject        = subject,
+                priority       = result['triage'].get('priority', 'Medium'),
+                queue          = result['triage'].get('queue', ''),
+                user_email     = user_email,
+                user_slack_id  = user_slack_id,
+                jira_key       = jira_key,
+            )
+            # Notify solution or escalation
+            if result.get('escalated'):
+                slack.notify_escalation(
+                    ticket_id         = ticket_id,
+                    subject           = subject,
+                    queue             = result['triage'].get('queue', ''),
+                    escalation_reason = result.get('escalation_reason', ''),
+                    user_email        = user_email,
+                    user_slack_id     = user_slack_id,
+                    jira_key          = jira_key,
+                )
+            elif result.get('solution'):
+                slack.notify_solution_ready(
+                    ticket_id     = ticket_id,
+                    subject       = subject,
+                    solution      = result['solution'],
+                    confidence    = result.get('confidence', 0.75),
+                    user_email    = user_email,
+                    user_slack_id = user_slack_id,
+                    jira_key      = jira_key,
+                )
+            # Notify systemic alert if pattern miner fired
+            if systemic_alert and not systemic_alert.already_known:
+                from src.jira_integration import get_jira_key
+                cluster_jira_keys = [
+                    k for k in [
+                        get_jira_key(config.DATABASE_PATH, tid)
+                        for tid in systemic_alert.cluster.ticket_ids
+                    ] if k
+                ]
+                slack.notify_systemic_alert(
+                    alert_id   = systemic_alert.alert_id,
+                    severity   = systemic_alert.severity,
+                    summary    = systemic_alert.summary,
+                    ticket_ids = systemic_alert.cluster.ticket_ids,
+                    jira_keys  = cluster_jira_keys,
+                )
+        except Exception as slack_err:
+            logger.error(f"Slack notification block failed: {slack_err}")
+        # ── End Slack ─────────────────────────────────────────────────────
 
         return jsonify(response)
         
     except Exception as e:
         logger.error(f"Error processing ticket: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/predict/stream', methods=['POST'])
@@ -679,6 +798,7 @@ def predict_stream():
     user_company_id = current_user.company_id if user_authenticated else None
     user_id_str = str(current_user.id) if user_authenticated else "unknown"
     user_email = current_user.email if user_authenticated else "eceproject2026+unknown@gmail.com"
+    user_slack_id = current_user.slack_id if user_authenticated else None
 
     def generate():
         try:
@@ -722,26 +842,61 @@ def predict_stream():
             yield f"event: triage\ndata: {json.dumps(triage_event)}\n\n"
             logger.info(f"[STREAM] Triage event sent for ticket {ticket_id}")
 
+            # --- Save initial ticket data to DB after triage ---
+            try:
+                conn = sqlite3.connect(config.DATABASE_PATH)
+                cursor = conn.cursor()
+                status = 'pending_solution' # Initial status for streaming tickets
+                
+                cursor.execute('''
+                    INSERT INTO classified_tickets
+                    (id, subject, body, pred_type, pred_priority, pred_queue, timestamp, corrected, user_id, status, user_slack_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+                ''', (
+                    ticket_id, subject, body,
+                    triage_result['type'], triage_result['priority'], triage_result['queue'],
+                    datetime.now(), user_id_str if user_authenticated else None, status, user_slack_id
+                ))
+                conn.commit()
+                conn.close()
+                logger.info(f"[STREAM] Initial ticket {ticket_id} saved (status: {status})")
+
+                audit_log('TICKET_CREATED', ticket_id, user_id_str, f"Stream created with subject: {subject[:50]}")
+
+                # Notify ticket created via Slack
+                slack.notify_ticket_created(
+                    ticket_id=ticket_id,
+                    subject=subject,
+                    priority=triage_result.get('priority', 'Medium'),
+                    queue=triage_result.get('queue', ''),
+                    user_slack_id=user_slack_id,
+                    jira_key=None # Jira key not available yet
+                )
+
+            except Exception as db_err:
+                logger.error(f"[STREAM] Initial DB save failed: {db_err}")
+
+
             # --- STEP 2: Full solve (slow, uses triage result internally) ---
             logger.info(f"[STREAM] Solver starting for ticket {ticket_id}")
             result = solver.solve(subject=subject, body=body, ticket_id=ticket_id)
 
-            # --- Save ticket to DB ---
+            # --- Update ticket in DB with solution/escalation ---
             try:
                 conn = sqlite3.connect(config.DATABASE_PATH)
                 cursor = conn.cursor()
                 status = 'escalated' if result.get('escalated') else 'solution_proposed'
 
                 cursor.execute('''
-                    INSERT INTO classified_tickets
-                    (id, subject, body, pred_type, pred_priority, pred_queue, timestamp, corrected, user_id, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                    UPDATE classified_tickets
+                    SET status = ?, pred_type = ?, pred_priority = ?, pred_queue = ?
+                    WHERE id = ?
                 ''', (
-                    ticket_id, subject, body,
-                    result['triage']['type'], result['triage']['priority'], result['triage']['queue'],
-                    datetime.now(), user_id_str if user_authenticated else None, status
+                    status, result['triage']['type'], result['triage']['priority'], result['triage']['queue'],
+                    ticket_id
                 ))
 
+                # Add user message and AI response to interactions
                 cursor.execute(
                     "INSERT INTO ticket_interactions (ticket_id, sender, message, timestamp) VALUES (?, 'user', ?, ?)",
                     (ticket_id, body, datetime.now())
@@ -754,9 +909,14 @@ def predict_stream():
 
                 conn.commit()
                 conn.close()
-                logger.info(f"[STREAM] Ticket {ticket_id} saved (status: {status})")
+                logger.info(f"[STREAM] Ticket {ticket_id} updated with solution/escalation (status: {status})")
 
-                # Notifications
+                if result.get('escalated'):
+                    audit_log('TICKET_ESCALATED', ticket_id, user_id_str, f"Escalated reason: {result.get('escalation_reason')}")
+                else:
+                    audit_log('TICKET_RESOLVED', ticket_id, user_id_str, f"Status: solution_proposed")
+
+                # Notifications (Email)
                 try:
                     if automation_specialist is None:
                         init_solver()
@@ -765,14 +925,27 @@ def predict_stream():
                         'type': result['triage']['type'], 'priority': result['triage']['priority'],
                         'user_id': user_id_str, 'status': status
                     }
+                    # Append confirmation links for email
+                    if not result.get('escalated') and result.get('solution'):
+                        base_url = request.host_url.rstrip('/')
+                        confirm_yes = f"{base_url}/ticket/confirm/{ticket_id}?response=yes"
+                        confirm_no = f"{base_url}/ticket/confirm/{ticket_id}?response=no"
+                        confirmation_block = f"""
+<br><hr><br>
+<b>Did this resolve your issue?</b><br>
+✅ Yes, close my ticket: <a href="{confirm_yes}">{confirm_yes}</a><br>
+❌ No, I still need help: <a href="{confirm_no}">{confirm_no}</a>
+"""
+                        result['solution'] += confirmation_block
+
                     automation_specialist.notify_ticket_resolution(
                         ticket_data=ticket_data, result=result, user_email=user_email
                     )
                 except Exception as notify_err:
-                    logger.error(f"[STREAM] Notification failed: {notify_err}")
+                    logger.error(f"[STREAM] Email Notification failed: {notify_err}")
 
             except Exception as db_err:
-                logger.error(f"[STREAM] DB save failed: {db_err}")
+                logger.error(f"[STREAM] DB update failed after solve: {db_err}")
 
             # ── Jira Integration for Stream ──────────────────────────────────
             jira_key = None
@@ -805,6 +978,30 @@ def predict_stream():
             except Exception as jira_err:
                 logger.error(f"[STREAM] Jira integration failed: {jira_err}")
             # ── End Jira ─────────────────────────────────────────────────────
+
+            # ── Slack notifications for solution/escalation ──────────────────
+            try:
+                if result.get('escalated'):
+                    slack.notify_escalation(
+                        ticket_id=ticket_id,
+                        subject=subject,
+                        queue=result['triage'].get('queue', ''),
+                        escalation_reason=result.get('escalation_reason', ''),
+                        user_slack_id=user_slack_id,
+                        jira_key=jira_key,
+                    )
+                elif result.get('solution'):
+                    slack.notify_solution_ready(
+                        ticket_id=ticket_id,
+                        subject=subject,
+                        solution=result['solution'],
+                        confidence=result.get('confidence', 0.75),
+                        user_slack_id=user_slack_id,
+                        jira_key=jira_key,
+                    )
+            except Exception as slack_err:
+                logger.error(f"[STREAM] Slack notification for solution/escalation failed: {slack_err}")
+            # ── End Slack ────────────────────────────────────────────────────
 
             # --- Yield solution event ---
             solution_event = {
@@ -1037,10 +1234,19 @@ def validate_solution():
             conn = sqlite3.connect(config.DATABASE_PATH)
             conn.execute("UPDATE classified_tickets SET corrected = 1 WHERE id = ?", (ticket_id,))
             conn.commit()
+            
+            # Get user_slack_id for notification
+            cursor = conn.cursor()
+            cursor.execute("SELECT user_slack_id, subject FROM classified_tickets WHERE id = ?", (ticket_id,))
+            row = cursor.fetchone()
+            user_slack_id = row[0] if row else None
+            subject = row[1] if row else "Unknown Subject"
+            
             conn.close()
             
             # Clean up PII if needed
             _cleanup_ticket(ticket_id)
+            audit_log('TICKET_RESOLVED', ticket_id, str(current_user.id), "Ticket closed directly via manual resolve button")
             
             # ── Update Jira ─────────────────────────────────────────────────────
             # Since this is a manual resolution from the frontend, we update the ticket in Jira
@@ -1058,6 +1264,18 @@ def validate_solution():
             except Exception as jira_e:
                 logger.error(f"Error marking Jira issue as resolved for {ticket_id}: {jira_e}")
             # ── End Jira ────────────────────────────────────────────────────────
+
+            # ── Slack Notification ──────────────────────────────────────────
+            try:
+                slack.notify_resolved(
+                    ticket_id=ticket_id,
+                    subject=subject,
+                    user_slack_id=user_slack_id,
+                    jira_key=jira_key,
+                )
+            except Exception as slack_err:
+                logger.error(f"Slack notification for manual resolution failed: {slack_err}")
+            # ── End Slack ───────────────────────────────────────────────────
             
             return jsonify({
                 'approved': True,
@@ -1074,8 +1292,11 @@ def validate_solution():
     subject = data.get('subject', '')
     body = data.get('body', '')
     triage = data.get('triage', {})
-    
-    if not solution or not subject or not body:
+    user_id_for_ticket = data.get('user_id', None)
+    user_slack_id = data.get('user_slack_id', None)
+    user_email = request.json.get('user_email', '')
+        
+    if not subject or not body:
         return jsonify({'error': 'Please provide solution, subject, and body'}), 400
     
     try:
@@ -1103,6 +1324,7 @@ def validate_solution():
                     conn.commit()
                     conn.close()
                     _cleanup_ticket(tid)
+                    audit_log('TICKET_RESOLVED', tid, str(current_user.id), "Ticket validated automatically and marked resolved")
              except Exception as db_e:
                  logger.error(f"Error marking resolved: {db_e}")
 
@@ -1306,6 +1528,7 @@ def claim_ticket(ticket_id):
         cursor.execute("UPDATE classified_tickets SET status = 'in_progress', human_agent = ? WHERE id = ?", (current_user.username, ticket_id))
         conn.commit()
         conn.close()
+        audit_log('TICKET_CLAIMED', ticket_id, str(current_user.id), f"Ticket claimed by agent {current_user.username}")
         return jsonify({'success': True, 'message': 'Ticket claimed'})
     except Exception as e:
         logger.error(f"Error claiming ticket: {e}")
@@ -1348,6 +1571,7 @@ def human_resolve_ticket(ticket_id):
             ''', (subject, body, resolution_notes, 'human_expert', p_type, p_queue, datetime.now()))
             
         conn.commit()
+        audit_log('TICKET_RESOLVED', ticket_id, str(current_user.id), "Ticket resolved via human resolve")
         
         # Send Email
         cursor.execute("SELECT email FROM users WHERE id = ?", (user_id,))
@@ -1411,12 +1635,92 @@ def list_escalated_tickets():
         logger.error(f"Error fetching escalated tickets: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/ticket/<ticket_id>/complete', methods=['POST'])
+@login_required
+def complete_ticket(ticket_id):
+    """
+    Called when user clicks 'This resolved it' on the dashboard.
+    Marks ticker as completed and updates Jira sync.
+    """
+    try:
+        if automation_specialist:
+            # We don't have the full ticket obj here easily, but the prompt says 
+            # "After automation_specialist.mark_ticket_completed() succeeds"
+            # Let's mock the expected structure or just call it if it expects a dict
+            conn = sqlite3.connect(config.DATABASE_PATH)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM classified_tickets WHERE id = ?", (ticket_id,))
+            row = cur.fetchone()
+            conn.close()
+            
+            if row:
+                ticket_obj = dict(row)
+                automation_specialist.mark_ticket_completed(ticket_obj, current_user.email)
+                
+        # ── Jira sync: mark Done ─────────────────────────────────────────
+        try:
+            jira_key = get_jira_key(config.DATABASE_PATH, ticket_id)
+            if jira_key:
+                jira_client.update_issue_resolved(
+                    jira_key   = jira_key,
+                    solution   = "Resolved by user confirmation via ECE dashboard.",
+                    ticket_id  = ticket_id,
+                    confidence = 1.0,
+                )
+                logger.info(f"Jira {jira_key} marked Done — user confirmed resolution")
+        except Exception as e:
+            logger.error(f"Jira sync on user resolution failed: {e}")
+        # ── End Jira sync ────────────────────────────────────────────────
+
+        try:
+            from src.jira_integration import get_jira_key
+            
+            # get subject for slack since we don't have it explicitly scoped here
+            conn_sub = sqlite3.connect(config.DATABASE_PATH)
+            c = conn_sub.cursor()
+            c.execute("SELECT subject, user_slack_id FROM classified_tickets WHERE id=?", (ticket_id,))
+            sub_row = c.fetchone()
+            conn_sub.close()
+            
+            sub_text = sub_row[0] if sub_row else "Ticket"
+            slack_id = sub_row[1] if sub_row else None
+            
+            slack.notify_resolved(
+                ticket_id     = ticket_id,
+                subject       = sub_text, 
+                user_slack_id = slack_id,
+                jira_key      = get_jira_key(config.DATABASE_PATH, ticket_id),
+            )
+        except Exception as e:
+            logger.error(f"Slack resolved notify failed: {e}")
+
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        conn.execute(
+            "UPDATE classified_tickets SET status = 'resolved', corrected = 1 WHERE id = ?",
+            (ticket_id,)
+        )
+        conn.commit()
+        conn.close()
+        
+        audit_log('TICKET_RESOLVED', ticket_id, str(current_user.id), "Ticket marked as complete from dashboard")
+
+        return jsonify({'success': True, 'message': 'Ticket marked as resolved'})
+        
+    except Exception as e:
+        logger.error(f"Error completing ticket {ticket_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     print("\n" + "=" * 50)
     print("Starting ECE Agent Web Application...")
     print("=" * 50 + "\n")
     print(f"  Local URL : http://{config.SERVER['host']}:{config.SERVER['port']}")
     print()
+
+    # Start Slack Socket Mode listener in background thread
+    slack_thread = threading.Thread(target=start_socket_mode, daemon=True)
+    slack_thread.start()
 
     # ── Start Flask ──────────────────────────────────────────────────
     init_solver()

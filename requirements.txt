@@ -9,3 +9,5 @@ scikit-learn
 numpy
 pandas
 requests>=2.31.0
+gunicorn
+slack-sdk>=3.27.0

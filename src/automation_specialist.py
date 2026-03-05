@@ -1510,6 +1510,136 @@ class AutomationSpecialist:
         
         return ticket
 
+    def process_inbound_email(self, email_subject: str, email_body: str) -> Dict[str, Any]:
+        """
+        Processes an inbound email reply, extracts the ticket ID, and detects intents
+        like RESOLVED or NEEDS_MORE_HELP to sync ECE and Jira status.
+        """
+        import re
+        from src.jira_integration import JiraIntegration, get_jira_key
+        
+        # 1. Extract Ticket ID from subject
+        match = re.search(r'ECE-([A-Z0-9]+)', email_subject, re.IGNORECASE)
+        if not match:
+            # Fallback to the format used in our app (e.g. Ticket #CMP1230001)
+            match = re.search(r'Ticket\s*#([A-Z0-9]+)', email_subject, re.IGNORECASE)
+            
+        if not match:
+            logger.warning(f"Could not extract ticket ID from subject: '{email_subject}'")
+            return {"success": False, "error": "No ticket ID in subject"}
+            
+        ticket_id = match.group(1)
+        body_lower = email_body.lower()
+        
+        # 2. Detect intents
+        resolved_keywords = ['resolved', 'fixed', 'working', 'thank you', 'thanks']
+        needs_help_keywords = ['still', 'not working', 'no', 'need help', "didn't work", "does not work"]
+        
+        is_resolved = any(kw in body_lower for kw in resolved_keywords)
+        needs_help = any(kw in body_lower for kw in needs_help_keywords)
+        
+        # Determine primary intent (mutually exclusive)
+        if is_resolved and needs_help:
+            # If both are present, prioritize needing help just to be safe
+            is_resolved = False
+
+        if is_resolved:
+            # ── FLOW 3: mark resolved ───────────────────────────────────────────────
+            try:
+                conn = sqlite3.connect(config.DATABASE_PATH)
+                conn.execute(
+                    """UPDATE classified_tickets
+                       SET status = 'resolved', corrected = 1
+                       WHERE id = ?""",
+                    (ticket_id,)
+                )
+                conn.execute(
+                    """INSERT INTO ticket_interactions
+                       (ticket_id, sender, message, timestamp)
+                       VALUES (?, 'system', ?, ?)""",
+                    (
+                        ticket_id,
+                        "User confirmed resolution via email reply.",
+                        datetime.now().isoformat(),
+                    )
+                )
+                conn.commit()
+                conn.close()
+                logger.info(f"ECE ticket {ticket_id} marked resolved via email reply")
+            except Exception as e:
+                logger.error(f"Email-resolve ECE DB update failed: {e}")
+            try:
+                from app import audit_log
+                audit_log('TICKET_RESOLVED', ticket_id, 'system', "Ticket marked resolved via email reply.")
+            except Exception as e:
+                logger.error(f"Audit log resolve failed: {e}")
+
+            try:
+                _jira = JiraIntegration()
+                jira_key = get_jira_key(config.DATABASE_PATH, ticket_id)
+                if jira_key:
+                    _jira.update_issue_resolved(
+                        jira_key   = jira_key,
+                        solution   = "Resolved by user via email reply.",
+                        ticket_id  = ticket_id,
+                        confidence = 1.0,
+                    )
+                    logger.info(f"Jira {jira_key} marked Done via email resolution sync")
+            except Exception as e:
+                logger.error(f"Email-resolve Jira sync failed: {e}")
+                
+            return {"success": True, "intent": "RESOLVED", "ticket_id": ticket_id}
+
+        elif needs_help:
+            # ── FLOW 4: mark escalated ──────────────────────────────────────────────
+            try:
+                conn = sqlite3.connect(config.DATABASE_PATH)
+                conn.execute(
+                    """UPDATE classified_tickets
+                       SET status = 'escalated'
+                       WHERE id = ?""",
+                    (ticket_id,)
+                )
+                conn.execute(
+                    """INSERT INTO ticket_interactions
+                       (ticket_id, sender, message, timestamp)
+                       VALUES (?, 'system', ?, ?)""",
+                    (
+                        ticket_id,
+                        "User indicated via email that the issue is not resolved. Escalating.",
+                        datetime.now().isoformat(),
+                    )
+                )
+                conn.commit()
+                conn.close()
+                logger.info(f"ECE ticket {ticket_id} escalated via email reply")
+            except Exception as e:
+                logger.error(f"Email-escalate ECE DB update failed: {e}")
+            try:
+                from app import audit_log
+                audit_log('TICKET_ESCALATED', ticket_id, 'system', "Ticket escalated via email reply due to user needing more help.")
+            except Exception as e:
+                logger.error(f"Audit log escalate failed: {e}")
+
+            try:
+                _jira = JiraIntegration()
+                jira_key = get_jira_key(config.DATABASE_PATH, ticket_id)
+                if jira_key:
+                    _jira.update_issue_escalated(
+                        jira_key          = jira_key,
+                        ticket_id         = ticket_id,
+                        escalation_reason = "User replied via email: issue not resolved.",
+                    )
+                    logger.info(f"Jira {jira_key} moved to In Progress via email escalation sync")
+            except Exception as e:
+                logger.error(f"Email-escalate Jira sync failed: {e}")
+                
+            return {"success": True, "intent": "NEEDS_MORE_HELP", "ticket_id": ticket_id}
+
+        else:
+            # Just a normal reply, could log the interaction but that's outside the requested scope
+            return {"success": True, "intent": "UNKNOWN", "ticket_id": ticket_id}
+
 
 # ============================================================================
 # TESTING / DEMO

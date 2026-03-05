@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile python files (Syntax check)
+        env:
+          SMTP_PASSWORD: dummy_password
+          GOOGLE_API_KEY: dummy_google_key
+          GROQ_API_KEY: dummy_groq_key
+          JIRA_API_TOKEN: dummy_jira_token
+          SECRET_KEY: dummy_secret_key
+          JIRA_WEBHOOK_SECRET: dummy_webhook_secret
+        run: |
+          python -m py_compile app.py config.py
+
+      - name: Pip check
+        run: |
+          pip check
