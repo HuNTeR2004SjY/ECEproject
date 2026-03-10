@@ -99,7 +99,8 @@ class User(UserMixin):
         cursor.execute("""
             SELECT 
                 t.id, t.subject, t.body, t.pred_type, t.pred_priority, t.timestamp, t.corrected,
-                u.username as raised_by
+                t.status, t.human_agent, t.resolution_notes, t.resolved_at,
+                u.username as raised_by, u.id as raised_by_id
             FROM classified_tickets t
             LEFT JOIN users u ON t.user_id = u.id
             -- Optionally filter by company if we had company_id in tickets, 
@@ -107,7 +108,7 @@ class User(UserMixin):
             -- Since we don't have company_id in tickets yet, we'll verify user's company match.
             -- JOIN users u ON t.user_id = u.id WHERE u.company_id = ?
             WHERE u.company_id = ?
-            ORDER BY t.timestamp DESC LIMIT 50
+            ORDER BY t.timestamp DESC
         """, (company_id,))
         
         tickets = [dict(row) for row in cursor.fetchall()]
@@ -286,3 +287,68 @@ class Department:
             return False
         finally:
             conn.close()
+
+
+
+class Company:
+    @staticmethod
+    def email_exists(email):
+        """Check if a company email is already registered (emails are the unique identifier)."""
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1 FROM companies WHERE LOWER(email) = LOWER(?)", (email,))
+        exists = cursor.fetchone() is not None
+        conn.close()
+        return exists
+
+    @staticmethod
+    def register_with_admin(company_name, company_email, admin_username, admin_password, admin_email):
+        """
+        Atomically create a company and its first admin user.
+        Returns (True, company_name) on success, or (False, error_message) on failure.
+        Everything happens in one transaction — if any step fails the whole thing rolls back.
+        """
+        import hashlib
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        try:
+            conn.execute("BEGIN")
+            cursor = conn.cursor()
+
+            # Insert company
+            cursor.execute(
+                "INSERT INTO companies (name, email) VALUES (?, ?)",
+                (company_name, company_email)
+            )
+            company_id = cursor.lastrowid
+
+            # Insert admin user
+            password_hash = hashlib.sha256(admin_password.encode()).hexdigest()
+            cursor.execute(
+                "INSERT INTO users (company_id, username, password_hash, role, email) VALUES (?, ?, ?, ?, ?)",
+                (company_id, admin_username, password_hash, 'admin', admin_email)
+            )
+
+            conn.commit()
+            return True, company_name
+        except sqlite3.IntegrityError as e:
+            conn.rollback()
+            return False, f"Database conflict: {e}"
+        except Exception as e:
+            conn.rollback()
+            return False, str(e)
+        finally:
+            conn.close()
+
+    @staticmethod
+    def get_all():
+        """Return all companies as a list of dicts with id, name, email."""
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT id, name, email FROM companies ORDER BY name ASC")
+        except Exception:
+            cursor.execute("SELECT id, name FROM companies ORDER BY name ASC")
+        companies = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return companies

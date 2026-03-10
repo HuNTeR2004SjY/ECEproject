@@ -23,6 +23,328 @@
         .nav-item.active {
             background: rgba(0, 0, 0, 0.05);
         }
+
+        /* ── Filter Bar ─────────────────────────────── */
+        .filter-bar {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        /* Title row at top of filter card */
+        .filter-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border);
+            background: rgba(0, 0, 0, 0.02);
+        }
+
+        .filter-header-title {
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .filter-badge {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(99, 102, 241, 0.12);
+            color: var(--primary);
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .btn-clear {
+            margin-left: auto;
+            padding: 5px 14px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-clear:hover {
+            background: rgba(239, 68, 68, 0.08);
+            border-color: #EF4444;
+            color: #EF4444;
+        }
+
+        /* Status chip strip */
+        .filter-chips-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .chip {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.76rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-secondary);
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .chip:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .chip.chip-active {
+            background: var(--primary);
+            color: #fff;
+            border-color: var(--primary);
+        }
+
+        .chip-escalated.chip-active {
+            background: #EF4444;
+            border-color: #EF4444;
+        }
+
+        .chip-pending.chip-active {
+            background: #F59E0B;
+            border-color: #F59E0B;
+        }
+
+        .chip-resolved.chip-active {
+            background: #10B981;
+            border-color: #10B981;
+        }
+
+        .chip-progress.chip-active {
+            background: #F59E0B;
+            border-color: #F59E0B;
+        }
+
+        .chip-closed.chip-active {
+            background: #6B7280;
+            border-color: #6B7280;
+        }
+
+        /* Controls row */
+        .filter-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 12px;
+            padding: 14px 18px;
+            align-items: end;
+        }
+
+        .filter-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .filter-field label {
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .filter-field select,
+        .filter-field input[type="date"],
+        .filter-field input[type="text"] {
+            padding: 7px 10px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 0.82rem;
+            outline: none;
+            transition: border-color 0.15s;
+            width: 100%;
+        }
+
+        .filter-field select:focus,
+        .filter-field input:focus {
+            border-color: var(--primary);
+        }
+
+        /* Search row below controls */
+        .filter-search-row {
+            padding: 0 18px 14px;
+        }
+
+        .filter-search-row input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 0.84rem;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .filter-search-row input:focus {
+            border-color: var(--primary);
+        }
+
+        .filter-search-row input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* result count */
+        .result-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 0 2px;
+        }
+
+        .result-count {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+        }
+
+        /* status badge helpers inline */
+        .sb {
+            display: inline-block;
+            padding: 3px 9px;
+            border-radius: 4px;
+            font-size: 0.78rem;
+            font-weight: 500;
+        }
+
+        .sb-escalated {
+            background: rgba(239, 68, 68, 0.15);
+            color: #EF4444;
+        }
+
+        .sb-in_progress {
+            background: rgba(245, 158, 11, 0.15);
+            color: #F59E0B;
+        }
+
+        .sb-reopened {
+            background: rgba(239, 68, 68, 0.12);
+            color: #F97316;
+        }
+
+        .sb-resolved {
+            background: rgba(52, 211, 153, 0.15);
+            color: #10B981;
+        }
+
+        .sb-auto_closed {
+            background: rgba(156, 163, 175, 0.15);
+            color: #6B7280;
+        }
+
+        .sb-pending {
+            background: rgba(251, 191, 36, 0.15);
+            color: #F59E0B;
+        }
+
+        .sb-active {
+            background: rgba(99, 102, 241, 0.12);
+            color: var(--primary);
+        }
+
+        .action-cell {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .btn-sm {
+            padding: 4px 10px;
+            border-radius: 5px;
+            font-size: 0.78rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .btn-sm:hover {
+            background: rgba(0, 0, 0, 0.06);
+        }
+
+        .btn-sm.btn-claim {
+            background: rgba(239, 68, 68, 0.1);
+            color: #EF4444;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-sm.btn-claim:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .btn-sm.btn-resolve {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10B981;
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-sm.btn-resolve:hover {
+            background: rgba(16, 185, 129, 0.2);
+        }
+
+        /* empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state span {
+            font-size: 2.5rem;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .empty-state p {
+            font-size: 0.9rem;
+        }
+
+        /* skeleton loader rows */
+        @keyframes shimmer {
+            0% {
+                background-position: -400px 0;
+            }
+
+            100% {
+                background-position: 400px 0;
+            }
+        }
+
+        .skeleton-row td {
+            padding: 12px 8px !important;
+        }
+
+        .sk {
+            height: 12px;
+            border-radius: 4px;
+            background: linear-gradient(90deg, var(--border) 25%, rgba(0, 0, 0, 0.03) 50%, var(--border) 75%);
+            background-size: 400px 100%;
+            animation: shimmer 1.2s infinite linear;
+        }
     </style>
 </head>
 
@@ -31,12 +353,11 @@
         <!-- Top Navbar -->
         <header class="navbar">
             <div class="navbar-left">
-                <div class="logo-icon">🛡️</div>
-                <h2>ECE Admin</h2>
+                <div class="logo-icon" style="font-size:1.1rem;font-weight:700;letter-spacing:0.5px;">ECE</div>
+                <h2>Admin</h2>
                 <nav class="navbar-nav">
                     <button class="nav-item active" onclick="switchView('overview', this)">Overview</button>
-                    <button class="nav-item" onclick="switchView('escalated', this)">🚨 Escalated Queue</button>
-                    <button class="nav-item" onclick="switchView('history', this)">History</button>
+                    <button class="nav-item" onclick="switchView('history', this)">Ticket History</button>
                     <button class="nav-item" onclick="switchView('users', this)">Users</button>
                     <button class="nav-item" onclick="switchView('settings', this)">Settings</button>
                 </nav>
@@ -168,77 +489,190 @@
                 </div>
             </div>
 
-            <!-- ESCALATED QUEUE SECTION -->
-            <div id="escalated" class="view-section">
-                <div class="section-header">
-                    <h2>Escalated Tickets — Human Resolution Queue</h2>
-                    <p>Tickets the AI could not resolve. Claim and resolve them below.</p>
-                </div>
-                <div class="recent-activity">
-                    <table class="activity-table" id="escalatedTable">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Subject</th>
-                                <th>Type</th>
-                                <th>Priority</th>
-                                <th>Queue</th>
-                                <th>Raised By</th>
-                                <th>Submitted</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="escalatedTableBody">
-                            <tr>
-                                <td colspan="9">Loading escalated tickets...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- HISTORY SECTION -->
+            <!-- =========================================================== -->
+            <!-- HISTORY SECTION — with rich filters                          -->
+            <!-- =========================================================== -->
             <div id="history" class="view-section">
                 <div class="section-header">
                     <h2>Ticket History</h2>
-                    <p>All past tickets and resolutions.</p>
+                    <p>Browse, filter, and manage all tickets across your organisation.</p>
                 </div>
+
+                <!-- Filter Bar -->
+                <div class="filter-bar">
+
+                    <!-- Header row: title + active badge + clear -->
+                    <div class="filter-header">
+                        <span class="filter-header-title">Filters</span>
+                        <span id="activeFiltersBadge"></span>
+                        <button class="btn-clear" onclick="clearFilters()">Clear all</button>
+                    </div>
+
+                    <!-- Status chips strip -->
+                    <div class="filter-chips-row" id="statusChips">
+                        <button class="chip chip-all chip-active" data-status="all"
+                            onclick="setStatusChip(this)">All</button>
+                        <button class="chip chip-active-st" data-status="active"
+                            onclick="setStatusChip(this)">Active</button>
+                        <button class="chip chip-pending" data-status="pending"
+                            onclick="setStatusChip(this)">Pending</button>
+                        <button class="chip chip-escalated" data-status="escalated"
+                            onclick="setStatusChip(this)">Escalated</button>
+                        <button class="chip chip-progress" data-status="in_progress" onclick="setStatusChip(this)">In
+                            Progress</button>
+                        <button class="chip chip-escalated" data-status="reopened"
+                            onclick="setStatusChip(this)">Reopened</button>
+                        <button class="chip chip-resolved" data-status="resolved"
+                            onclick="setStatusChip(this)">Resolved</button>
+                        <button class="chip chip-closed" data-status="auto_closed"
+                            onclick="setStatusChip(this)">Auto-Closed</button>
+                    </div>
+
+                    <!-- Control row: dropdowns + date range -->
+                    <div class="filter-controls">
+                        <div class="filter-field">
+                            <label>Raised by</label>
+                            <select id="filterUser" onchange="loadHistory()">
+                                <option value="">All users</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-field">
+                            <label>Priority</label>
+                            <select id="filterPriority" onchange="loadHistory()">
+                                <option value="">All</option>
+                                <option value="Critical">Critical</option>
+                                <option value="High">High</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Low">Low</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-field">
+                            <label>Type</label>
+                            <select id="filterType" onchange="loadHistory()">
+                                <option value="">All</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-field">
+                            <label>From</label>
+                            <input type="date" id="filterDateFrom" onchange="loadHistory()">
+                        </div>
+
+                        <div class="filter-field">
+                            <label>To</label>
+                            <input type="date" id="filterDateTo" onchange="loadHistory()">
+                        </div>
+                    </div>
+
+                    <!-- Search row -->
+                    <div class="filter-search-row">
+                        <input type="text" id="searchInput" placeholder="Search by subject…" oninput="debounceLoad()"
+                            autocomplete="off">
+                    </div>
+
+                </div>
+
+                <!-- Result meta -->
+                <div class="result-meta">
+                    <span class="result-count" id="resultCount">Loading…</span>
+                </div>
+
                 <div class="recent-activity">
-                    <table class="activity-table">
+                    <table class="activity-table" id="historyTable">
                         <thead>
                             <tr>
                                 <th>ID</th>
                                 <th>Subject</th>
                                 <th>Type</th>
                                 <th>Priority</th>
-                                <th>User</th>
+                                <th>Raised By</th>
                                 <th>Status</th>
                                 <th>Date</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {% for ticket in tickets %}
-                            <tr style="transition: background 0.2s;">
-                                <td style="font-weight: 500;">#{{ ticket.id }}</td>
-                                <td style="color: var(--text-primary);">{{ ticket.subject }}</td>
-                                <td><span class="badge badge-{{ ticket.pred_type|lower }}">{{ ticket.pred_type }}</span>
-                                </td>
-                                <td><span class="badge badge-{{ ticket.pred_priority|lower }}">{{ ticket.pred_priority
-                                        }}</span></td>
-                                <td>{{ ticket.raised_by }}</td>
+                        <tbody id="historyTableBody">
+                            <!-- skeleton -->
+                            <tr class="skeleton-row">
                                 <td>
-                                    {% if ticket.corrected %}
-                                    <span class="status-resolved"
-                                        style="background: rgba(52, 211, 153, 0.15); color: var(--success); padding: 4px 8px; border-radius: 4px;">Resolved</span>
-                                    {% else %}
-                                    <span class="status-pending"
-                                        style="background: rgba(251, 191, 36, 0.15); color: var(--warning); padding: 4px 8px; border-radius: 4px;">Pending</span>
-                                    {% endif %}
+                                    <div class="sk" style="width:40px"></div>
                                 </td>
-                                <td style="color: var(--text-muted); font-size: 0.9em;">{{ ticket.timestamp }}</td>
+                                <td>
+                                    <div class="sk"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:70px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:60px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:80px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:80px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:90px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:50px"></div>
+                                </td>
                             </tr>
-                            {% endfor %}
+                            <tr class="skeleton-row">
+                                <td>
+                                    <div class="sk" style="width:40px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:70px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:60px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:80px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:80px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:90px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:50px"></div>
+                                </td>
+                            </tr>
+                            <tr class="skeleton-row">
+                                <td>
+                                    <div class="sk" style="width:40px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:70px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:60px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:80px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:80px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:90px"></div>
+                                </td>
+                                <td>
+                                    <div class="sk" style="width:50px"></div>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -251,7 +685,12 @@
                         <h2>User Management</h2>
                         <p>Manage employee accounts.</p>
                     </div>
-                    <button class="cta-button" onclick="openUserModal()">+ Add User</button>
+                    <div style="display:flex; gap:8px;">
+                        <button class="cta-button"
+                            style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary);"
+                            onclick="openBulkModal()">Bulk Upload CSV</button>
+                        <button class="cta-button" onclick="openUserModal()">+ Add User</button>
+                    </div>
                 </div>
                 <div class="recent-activity">
                     <table class="activity-table" id="usersTable">
@@ -317,14 +756,14 @@
 
         </main>
 
-        <!-- Ticket Details Modal (Existing) -->
+        <!-- Ticket Details Modal -->
         <div id="ticketDetailsModal" class="modal"
             style="display: none; align-items: center; justify-content: center; background: rgba(255,255,255,0.4); backdrop-filter: blur(5px);">
             <div class="modal-content"
                 style="background: var(--bg-card); border: 1px solid var(--border); box-shadow: var(--shadow-xl); border-radius: var(--radius-lg); overflow: hidden; max-width: 600px; width: 90%;">
                 <div class="modal-header"
                     style="background: rgba(0,0,0,0.03); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
-                    <h2 style="font-size: 1.25rem; font-weight: 600;">🎫 Ticket Details</h2>
+                    <h2 style="font-size: 1.25rem; font-weight: 600;">Ticket Details</h2>
                     <span class="close-modal"
                         style="font-size: 1.5rem; cursor: pointer; color: var(--text-secondary);">&times;</span>
                 </div>
@@ -410,7 +849,7 @@
                                 future AI use</label>
                         </div>
                         <div style="display: flex; gap: 10px; margin-top: 20px;">
-                            <button type="submit" class="cta-button" style="flex: 1;">Submit & Notify User</button>
+                            <button type="submit" class="cta-button" style="flex: 1;">Submit &amp; Notify User</button>
                             <button type="button" class="btn-secondary close-modal-btn" style="flex: 1;">Cancel</button>
                         </div>
                     </form>
@@ -418,14 +857,14 @@
             </div>
         </div>
 
-        <!-- Add User Modal (New) -->
+        <!-- Add User Modal -->
         <div id="addUserModal" class="modal"
             style="display: none; align-items: center; justify-content: center; background: rgba(255,255,255,0.4); backdrop-filter: blur(5px);">
             <div class="modal-content"
                 style="background: var(--bg-card); border: 1px solid var(--border); box-shadow: var(--shadow-xl); border-radius: var(--radius-lg); overflow: hidden; max-width: 450px; width: 90%;">
                 <div class="modal-header"
                     style="background: rgba(0,0,0,0.03); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
-                    <h2 style="font-size: 1.25rem; font-weight: 600;">👤 Create New User</h2>
+                    <h2 style="font-size: 1.25rem; font-weight: 600;">Create New User</h2>
                     <span class="close-modal"
                         style="font-size: 1.5rem; cursor: pointer; color: var(--text-secondary);">&times;</span>
                 </div>
@@ -450,9 +889,77 @@
             </div>
         </div>
 
+        <!-- Bulk Upload Modal -->
+        <div id="bulkUploadModal" class="modal"
+            style="display: none; align-items: center; justify-content: center; background: rgba(255,255,255,0.4); backdrop-filter: blur(5px);">
+            <div class="modal-content"
+                style="background: var(--bg-card); border: 1px solid var(--border); box-shadow: var(--shadow-xl); border-radius: var(--radius-lg); overflow: hidden; max-width: 620px; width: 95%;">
+                <div class="modal-header"
+                    style="background: rgba(0,0,0,0.03); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="font-size: 1.2rem; font-weight: 600;">Bulk Upload Employees</h2>
+                    <span class="close-modal" id="bulkModalClose"
+                        style="font-size: 1.5rem; cursor: pointer; color: var(--text-secondary);">&times;</span>
+                </div>
+                <div class="modal-body" style="padding: 20px 24px;">
+
+                    <!-- Instructions -->
+                    <div
+                        style="background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 12px 16px; margin-bottom: 18px; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
+                        Upload a <strong>CSV file</strong> with three columns:
+                        <code
+                            style="background:rgba(0,0,0,0.06); padding:2px 6px; border-radius:4px; font-size:0.82rem;">username, email, password</code>.<br>
+                        The first row must be the header. Each employee gets the <em>employee</em> role by default.
+                        <br><br>
+                        <a id="downloadTemplate" href="#" onclick="downloadCsvTemplate(); return false;"
+                            style="color: var(--primary); font-weight: 600; text-decoration: none;">Download CSV
+                            Template</a>
+                    </div>
+
+                    <!-- File picker -->
+                    <div class="form-group">
+                        <label>Select CSV File</label>
+                        <input type="file" id="bulkCsvFile" accept=".csv,.txt" onchange="previewCsv(this)"
+                            style="width:100%; padding:8px; border:1px solid var(--border); border-radius:6px; background:var(--bg-card); color:var(--text-primary); cursor:pointer;">
+                    </div>
+
+                    <!-- CSV Preview -->
+                    <div id="bulkPreview" style="display:none; margin-bottom:18px;">
+                        <div style="font-size:0.82rem; font-weight:600; color:var(--text-secondary); margin-bottom:8px;"
+                            id="bulkPreviewMeta"></div>
+                        <div
+                            style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:6px;">
+                            <table class="activity-table" style="margin:0;">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Username</th>
+                                        <th>Email</th>
+                                        <th>Password</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bulkPreviewBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Result banner -->
+                    <div id="bulkResult" style="display:none; margin-bottom:14px;"></div>
+
+                    <div style="display:flex; gap:10px; margin-top:4px;">
+                        <button id="bulkUploadBtn" class="cta-button" style="flex:1;" onclick="uploadBulkCsv()"
+                            disabled>Upload Employees</button>
+                        <button class="btn-secondary close-modal-btn" style="flex:1;">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <script>
-            // --- View Switching ---
-            function switchView(viewId) {
+            // ─── Constants ────────────────────────────────────────────────────
+            const CURRENT_USER = '{{ user.username }}';
+
+            // ─── View Switching ───────────────────────────────────────────────
+            function switchView(viewId, btn) {
                 document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
                 document.getElementById(viewId).classList.add('active');
 
@@ -461,10 +968,200 @@
 
                 if (viewId === 'users') loadUsers();
                 if (viewId === 'settings') loadDepartments();
-                if (viewId === 'escalated') loadEscalatedTickets();
+                if (viewId === 'history') initHistory();
             }
 
-            // --- Users API ---
+            // ─── History Filter State ─────────────────────────────────────────
+            let historyState = {
+                status: 'all',   // 'all' | specific status string
+                user: '',
+                priority: '',
+                type: '',
+                dateFrom: '',
+                dateTo: '',
+                search: ''
+            };
+
+            let debounceTimer = null;
+            let historyInitialized = false;
+
+            function debounceLoad(ms = 350) {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(loadHistory, ms);
+            }
+
+            // ─── Status Chip Selection ────────────────────────────────────────
+            function setStatusChip(el) {
+                document.querySelectorAll('#statusChips .chip').forEach(c => c.classList.remove('chip-active'));
+                el.classList.add('chip-active');
+                historyState.status = el.dataset.status;
+                loadHistory();
+            }
+
+            // ─── Clear All Filters ────────────────────────────────────────────
+            function clearFilters() {
+                historyState = { status: 'all', user: '', priority: '', type: '', dateFrom: '', dateTo: '', search: '' };
+                document.querySelectorAll('#statusChips .chip').forEach(c => c.classList.remove('chip-active'));
+                document.querySelector('#statusChips .chip-all').classList.add('chip-active');
+                document.getElementById('filterUser').value = '';
+                document.getElementById('filterPriority').value = '';
+                document.getElementById('filterType').value = '';
+                document.getElementById('filterDateFrom').value = '';
+                document.getElementById('filterDateTo').value = '';
+                document.getElementById('searchInput').value = '';
+                loadHistory();
+            }
+
+            // ─── Build API URL from current state ────────────────────────────
+            function buildApiUrl() {
+                const p = new URLSearchParams();
+                const status = historyState.status || document.querySelector('#statusChips .chip-active')?.dataset.status || 'all';
+
+                if (status && status !== 'all') {
+                    p.set('status', status);
+                }
+
+                const userVal = document.getElementById('filterUser').value;
+                if (userVal) p.set('raised_by', userVal);
+
+                const priVal = document.getElementById('filterPriority').value;
+                if (priVal) p.set('priority', priVal);
+
+                const typeVal = document.getElementById('filterType').value;
+                if (typeVal) p.set('type', typeVal);
+
+                const fromVal = document.getElementById('filterDateFrom').value;
+                if (fromVal) p.set('date_from', fromVal);
+
+                const toVal = document.getElementById('filterDateTo').value;
+                if (toVal) p.set('date_to', toVal);
+
+                const searchVal = document.getElementById('searchInput').value.trim();
+                if (searchVal) p.set('search', searchVal);
+
+                return `/api/admin/tickets?${p.toString()}`;
+            }
+
+            // ─── Count active filters (excluding status) ──────────────────────
+            function countActiveFilters() {
+                let n = 0;
+                if (document.getElementById('filterUser').value) n++;
+                if (document.getElementById('filterPriority').value) n++;
+                if (document.getElementById('filterType').value) n++;
+                if (document.getElementById('filterDateFrom').value) n++;
+                if (document.getElementById('filterDateTo').value) n++;
+                if (document.getElementById('searchInput').value.trim()) n++;
+                const status = document.querySelector('#statusChips .chip-active')?.dataset.status;
+                if (status && status !== 'all') n++;
+                return n;
+            }
+
+            // ─── Status Badge HTML ────────────────────────────────────────────
+            function statusBadge(t) {
+                if (t.status === 'resolved' || t.corrected) return `<span class="sb sb-resolved">Resolved</span>`;
+                if (t.status === 'escalated') return `<span class="sb sb-escalated">Escalated</span>`;
+                if (t.status === 'in_progress') return `<span class="sb sb-in_progress">In Progress${t.human_agent ? ` · ${t.human_agent}` : ''}</span>`;
+                if (t.status === 'reopened') return `<span class="sb sb-reopened">Reopened</span>`;
+                if (t.status === 'auto_closed') return `<span class="sb sb-auto_closed">Auto-Closed</span>`;
+                return `<span class="sb sb-pending">Pending</span>`;
+            }
+
+            // ─── Action Buttons HTML ──────────────────────────────────────────
+            function actionButtons(t) {
+                const safeId = t.id;
+                const safeSubject = (t.subject || '').replace(/'/g, "\\'");
+                let btns = `<button class="btn-sm" onclick="viewTicket(${JSON.stringify(t).replace(/</g, '&lt;').replace(/>/g, '&gt;')})">View</button>`;
+
+                if ((t.status === 'escalated' || t.status === 'reopened')) {
+                    btns += ` <button class="btn-sm btn-claim" onclick="claimTicket('${safeId}')">Claim</button>`;
+                } else if (t.status === 'in_progress' && t.human_agent === CURRENT_USER) {
+                    btns += ` <button class="btn-sm btn-resolve" onclick="openResolutionModal('${safeId}','${safeSubject}','${t.pred_type}','${t.pred_priority}')">Resolve</button>`;
+                }
+                return `<div class="action-cell">${btns}</div>`;
+            }
+
+            // ─── Load History Table ───────────────────────────────────────────
+            async function loadHistory() {
+                const tbody = document.getElementById('historyTableBody');
+                tbody.innerHTML = `
+                    <tr class="skeleton-row"><td><div class="sk" style="width:40px"></div></td><td><div class="sk"></div></td><td><div class="sk" style="width:70px"></div></td><td><div class="sk" style="width:60px"></div></td><td><div class="sk" style="width:80px"></div></td><td><div class="sk" style="width:80px"></div></td><td><div class="sk" style="width:90px"></div></td><td><div class="sk" style="width:50px"></div></td></tr>
+                    <tr class="skeleton-row"><td><div class="sk" style="width:40px"></div></td><td><div class="sk"></div></td><td><div class="sk" style="width:70px"></div></td><td><div class="sk" style="width:60px"></div></td><td><div class="sk" style="width:80px"></div></td><td><div class="sk" style="width:80px"></div></td><td><div class="sk" style="width:90px"></div></td><td><div class="sk" style="width:50px"></div></td></tr>
+                `;
+
+                try {
+                    const res = await fetch(buildApiUrl());
+                    const tickets = await res.json();
+
+                    // Result count + active badge
+                    const nFilters = countActiveFilters();
+                    document.getElementById('resultCount').textContent = `${tickets.length} ticket${tickets.length !== 1 ? 's' : ''} found`;
+                    document.getElementById('activeFiltersBadge').innerHTML = nFilters > 0
+                        ? `<span class="filter-badge">🔍 ${nFilters} filter${nFilters > 1 ? 's' : ''} active</span>` : '';
+
+                    if (!tickets.length) {
+                        tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><span>🔍</span><p>No tickets match the selected filters.</p></div></td></tr>`;
+                        return;
+                    }
+
+                    // Populate dynamic type dropdown on first load
+                    if (!historyInitialized) {
+                        populateDynamicDropdowns(tickets);
+                        historyInitialized = true;
+                    }
+
+                    tbody.innerHTML = tickets.map(t => `
+                        <tr>
+                            <td style="font-weight:500;">#${t.id}</td>
+                            <td style="color:var(--text-primary); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${(t.subject || '').replace(/"/g, '&quot;')}">${t.subject || '—'}</td>
+                            <td><span class="badge badge-${(t.pred_type || '').toLowerCase()}">${t.pred_type || '—'}</span></td>
+                            <td><span class="badge badge-${(t.pred_priority || '').toLowerCase()}">${t.pred_priority || '—'}</span></td>
+                            <td>${t.raised_by || '<em style="color:var(--text-muted)">Unknown</em>'}</td>
+                            <td>${statusBadge(t)}</td>
+                            <td style="color:var(--text-muted);font-size:0.85em;white-space:nowrap;">${t.timestamp ? t.timestamp.slice(0, 16).replace('T', ' ') : '—'}</td>
+                            <td>${actionButtons(t)}</td>
+                        </tr>
+                    `).join('');
+
+                } catch (err) {
+                    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#EF4444;">Error loading tickets. Please try again.</td></tr>`;
+                    document.getElementById('resultCount').textContent = '';
+                }
+            }
+
+            // ─── Populate dynamic dropdowns from ticket data ──────────────────
+            function populateDynamicDropdowns(tickets) {
+                // Users dropdown
+                const userSel = document.getElementById('filterUser');
+                const existingUsers = new Set([...userSel.options].map(o => o.value).filter(Boolean));
+                const users = [...new Set(tickets.map(t => t.raised_by).filter(Boolean))].sort();
+                users.forEach(u => {
+                    if (!existingUsers.has(u)) {
+                        const opt = document.createElement('option');
+                        opt.value = u; opt.textContent = u;
+                        userSel.appendChild(opt);
+                    }
+                });
+
+                // Types dropdown
+                const typeSel = document.getElementById('filterType');
+                const existingTypes = new Set([...typeSel.options].map(o => o.value).filter(Boolean));
+                const types = [...new Set(tickets.map(t => t.pred_type).filter(Boolean))].sort();
+                types.forEach(tp => {
+                    if (!existingTypes.has(tp)) {
+                        const opt = document.createElement('option');
+                        opt.value = tp; opt.textContent = tp;
+                        typeSel.appendChild(opt);
+                    }
+                });
+            }
+
+            // ─── Called on first History tab open ────────────────────────────
+            function initHistory() {
+                historyInitialized = false; // reset so dropdowns repopulate with fresh data
+                loadHistory();
+            }
+
+            // ─── Users API ────────────────────────────────────────────────────
             async function loadUsers() {
                 const tbody = document.getElementById('usersTableBody');
                 try {
@@ -536,7 +1233,7 @@
                 }
             }
 
-            // --- Departments API ---
+            // ─── Departments API ──────────────────────────────────────────────
             async function loadDepartments() {
                 const tbody = document.getElementById('deptTableBody');
                 try {
@@ -583,7 +1280,7 @@
                 } catch (e) { alert('Error adding department'); }
             };
 
-            // --- Modal Logic ---
+            // ─── Modal Logic ──────────────────────────────────────────────────
             document.addEventListener('DOMContentLoaded', function () {
                 const modals = document.querySelectorAll('.modal');
                 const closeBtns = document.querySelectorAll('.close-modal, .close-modal-btn');
@@ -598,6 +1295,7 @@
                 };
 
                 window.viewTicket = function (ticket) {
+                    if (typeof ticket === 'string') ticket = JSON.parse(ticket);
                     const modal = document.getElementById('ticketDetailsModal');
                     document.getElementById('detailId').textContent = '#' + ticket.id;
                     document.getElementById('detailSubject').textContent = ticket.subject;
@@ -605,78 +1303,27 @@
                     document.getElementById('detailType').textContent = ticket.pred_type;
                     document.getElementById('detailPriority').textContent = ticket.pred_priority;
 
-                    if (ticket.resolution_notes) {
-                        document.getElementById('detailResolutionNotes').textContent = ticket.resolution_notes;
-                    } else {
-                        document.getElementById('detailResolutionNotes').textContent = '--';
-                    }
+                    document.getElementById('detailResolutionNotes').textContent =
+                        ticket.resolution_notes || '--';
 
                     if (ticket.human_agent && ticket.resolved_at) {
-                        document.getElementById('detailResolutionStatus').textContent = `Resolved by: ${ticket.human_agent} on ${ticket.resolved_at}`;
+                        document.getElementById('detailResolutionStatus').textContent =
+                            `Resolved by: ${ticket.human_agent} on ${ticket.resolved_at}`;
                     } else {
                         document.getElementById('detailResolutionStatus').textContent = 'Not yet resolved';
                     }
 
                     modal.style.display = 'flex';
                 };
-
             });
-            // --- Escalated Tickets API ---
-            async function loadEscalatedTickets() {
-                const tbody = document.getElementById('escalatedTableBody');
-                try {
-                    const res = await fetch('/api/admin/escalated-tickets');
-                    const data = await res.json();
 
-                    if (data.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center;">No escalated tickets in queue.</td></tr>';
-                        return;
-                    }
-
-                    const currentUser = '{{ user.username }}';
-
-                    tbody.innerHTML = data.map(t => {
-                        let statusBadge = '';
-                        let actionBtn = '';
-
-                        if (t.status === 'escalated' || t.status === 'reopened') {
-                            statusBadge = `<span style="background: rgba(239, 68, 68, 0.15); color: #EF4444; padding: 4px 8px; border-radius: 4px;">🔴 Awaiting Claim</span>`;
-                            actionBtn = `<button class="cta-button" onclick="claimTicket('${t.id}')">Claim Ticket</button>`;
-                        } else if (t.status === 'in_progress') {
-                            statusBadge = `<span style="background: rgba(245, 158, 11, 0.15); color: #F59E0B; padding: 4px 8px; border-radius: 4px;">🟡 In Progress by ${t.human_agent}</span>`;
-
-                            if (t.human_agent === currentUser) {
-                                actionBtn = `<button class="cta-button" style="background: var(--success);" onclick="openResolutionModal('${t.id}', '${t.subject.replace(/'/g, "\\'")}', '${t.pred_type}', '${t.pred_priority}')">Resolve</button>`;
-                            } else {
-                                actionBtn = `<span style="color: var(--text-muted); font-size: 0.9em;">Claimed by ${t.human_agent}</span>`;
-                            }
-                        }
-
-                        return `
-                        <tr>
-                            <td>#${t.id}</td>
-                            <td>${t.subject}</td>
-                            <td><span class="badge badge-${t.pred_type.toLowerCase()}">${t.pred_type}</span></td>
-                            <td><span class="badge badge-${t.pred_priority.toLowerCase()}">${t.pred_priority}</span></td>
-                            <td>${t.pred_queue}</td>
-                            <td>${t.raised_by || 'Unknown'}</td>
-                            <td>${t.timestamp}</td>
-                            <td>${statusBadge}</td>
-                            <td>${actionBtn}</td>
-                        </tr>
-                        `;
-                    }).join('');
-                } catch (e) {
-                    tbody.innerHTML = '<tr><td colspan="9">Error loading escalated tickets</td></tr>';
-                }
-            }
-
+            // ─── Claim Ticket ─────────────────────────────────────────────────
             async function claimTicket(ticketId) {
                 try {
                     const res = await fetch(`/api/admin/ticket/${ticketId}/claim`, { method: 'POST' });
                     const data = await res.json();
                     if (data.success) {
-                        loadEscalatedTickets();
+                        loadHistory();
                     } else {
                         alert(data.error);
                     }
@@ -685,6 +1332,7 @@
                 }
             }
 
+            // ─── Resolution Modal ─────────────────────────────────────────────
             window.openResolutionModal = function (id, subject, type, priority) {
                 document.getElementById('resModalTitle').textContent = `Submit Human Resolution - Ticket #${id}`;
                 document.getElementById('resTicketId').value = id;
@@ -713,7 +1361,7 @@
                     if (data.success) {
                         alert('Ticket resolved and user notified!');
                         document.getElementById('humanResolutionModal').style.display = 'none';
-                        loadEscalatedTickets();
+                        loadHistory();
                     } else {
                         alert(data.error);
                     }
@@ -722,7 +1370,123 @@
                 }
                 btn.disabled = false;
             };
+
+            // ─── Bulk Upload ──────────────────────────────────────────────────
+            let bulkParsedRows = [];
+
+            function openBulkModal() {
+                document.getElementById('bulkUploadModal').style.display = 'flex';
+                document.getElementById('bulkCsvFile').value = '';
+                document.getElementById('bulkPreview').style.display = 'none';
+                document.getElementById('bulkResult').style.display = 'none';
+                document.getElementById('bulkUploadBtn').disabled = true;
+                bulkParsedRows = [];
+            }
+
+            function downloadCsvTemplate() {
+                const csv = 'username,email,password\njohn.doe,john.doe@company.com,Password123\njane.smith,jane.smith@company.com,SecurePass1';
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'employee_template.csv';
+                a.click(); URL.revokeObjectURL(url);
+            }
+
+            function previewCsv(input) {
+                const file = input.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const text = e.target.result;
+                    const lines = text.trim().split(/\r?\n/);
+                    if (lines.length < 2) {
+                        alert('CSV must have a header row and at least one data row.');
+                        return;
+                    }
+                    // Parse header
+                    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                    const uIdx = headers.indexOf('username');
+                    const eIdx = headers.indexOf('email');
+                    const pIdx = headers.indexOf('password');
+                    if (uIdx < 0 || eIdx < 0 || pIdx < 0) {
+                        alert('CSV must have columns: username, email, password');
+                        return;
+                    }
+                    bulkParsedRows = [];
+                    lines.slice(1).forEach((line, i) => {
+                        if (!line.trim()) return;
+                        const cols = line.split(',').map(c => c.trim());
+                        bulkParsedRows.push({
+                            row: i + 2,
+                            username: cols[uIdx] || '',
+                            email: cols[eIdx] || '',
+                            password: cols[pIdx] || '',
+                        });
+                    });
+
+                    // Render preview
+                    const tbody = document.getElementById('bulkPreviewBody');
+                    tbody.innerHTML = bulkParsedRows.map(r => `
+                        <tr>
+                            <td style="color:var(--text-muted);font-size:0.8em;">${r.row}</td>
+                            <td>${r.username || '<em style="color:#EF4444">missing</em>'}</td>
+                            <td>${r.email || '<em style="color:#EF4444">missing</em>'}</td>
+                            <td style="letter-spacing:2px;color:var(--text-muted);">●●●●</td>
+                        </tr>
+                    `).join('');
+
+                    document.getElementById('bulkPreviewMeta').textContent =
+                        `Preview: ${bulkParsedRows.length} employee${bulkParsedRows.length !== 1 ? 's' : ''} found in file`;
+                    document.getElementById('bulkPreview').style.display = 'block';
+                    document.getElementById('bulkResult').style.display = 'none';
+                    document.getElementById('bulkUploadBtn').disabled = bulkParsedRows.length === 0;
+                };
+                reader.readAsText(file);
+            }
+
+            async function uploadBulkCsv() {
+                const fileInput = document.getElementById('bulkCsvFile');
+                if (!fileInput.files[0]) { alert('Please select a CSV file.'); return; }
+                const btn = document.getElementById('bulkUploadBtn');
+                btn.disabled = true; btn.textContent = 'Uploading…';
+
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+
+                try {
+                    const res = await fetch('/api/admin/users/bulk', { method: 'POST', body: formData });
+                    const data = await res.json();
+                    const resultEl = document.getElementById('bulkResult');
+                    resultEl.style.display = 'block';
+
+                    if (data.success) {
+                        let html = `
+                            <div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25); border-radius:8px; padding:12px 16px; font-size:0.85rem;">
+                                <strong style="color:#10B981;">✅ Upload complete</strong><br>
+                                <span style="color:var(--text-secondary);">
+                                    ${data.created} employee${data.created !== 1 ? 's' : ''} created
+                                    ${data.failed > 0 ? `· <span style="color:#F59E0B;">${data.failed} skipped</span>` : ''}
+                                </span>`;
+                        if (data.errors && data.errors.length) {
+                            html += `<ul style="margin:8px 0 0; padding-left:18px; color:#F59E0B; font-size:0.8rem;">`;
+                            data.errors.forEach(err => { html += `<li>${err}</li>`; });
+                            html += '</ul>';
+                        }
+                        html += '</div>';
+                        resultEl.innerHTML = html;
+                        if (data.created > 0) loadUsers();
+                    } else {
+                        resultEl.innerHTML = `<div style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); border-radius:8px; padding:12px 16px; color:#EF4444; font-size:0.85rem;">❌ ${data.error || 'Upload failed.'}</div>`;
+                    }
+                } catch (err) {
+                    document.getElementById('bulkResult').style.display = 'block';
+                    document.getElementById('bulkResult').innerHTML = `<div style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); border-radius:8px; padding:12px 16px; color:#EF4444; font-size:0.85rem;">❌ Network error. Please try again.</div>`;
+                }
+                btn.disabled = false; btn.textContent = 'Upload Employees';
+            }
         </script>
+
+
 </body>
 
 </html>

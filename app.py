@@ -40,7 +40,7 @@ import config
 from src.problem_solver_fixed import ProblemSolver
 from src.inference_service_full import TriageSpecialist
 from src.automation_specialist import AutomationSpecialist
-from src.models import User, Department
+from src.models import User, Department, Company
 from src.explainable_triage import ExplainableTriageWrapper
 from src.pattern_miner import PatternMiner
 from src.workflow_manager import WorkflowManager
@@ -163,6 +163,11 @@ def init_db_schema():
             cursor.execute("ALTER TABLE classified_tickets ADD COLUMN resolution_notes TEXT")
         except sqlite3.OperationalError:
             pass
+        try:
+            cursor.execute("ALTER TABLE companies ADD COLUMN email TEXT")
+        except sqlite3.OperationalError:
+            pass
+
         try:
             cursor.execute("ALTER TABLE classified_tickets ADD COLUMN resolved_at TIMESTAMP")
         except sqlite3.OperationalError:
@@ -330,8 +335,128 @@ def login():
 def logout():
     audit_log('USER_LOGOUT', None, str(current_user.id), f"User {current_user.username} logged out")
     logout_user()
-    flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
+
+
+# ── Company API ────────────────────────────────────────────────────────────────
+
+@app.route('/api/companies', methods=['GET'])
+def get_companies():
+    """Return all registered companies for the login page picker."""
+    try:
+        companies = Company.get_all()
+        return jsonify({'companies': companies})
+    except Exception as e:
+        logger.error(f"Error fetching companies: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/register-company', methods=['POST'])
+def register_company():
+    """
+    Register a new company and create its first admin account atomically.
+    Body: { company_name, company_email, admin_username, admin_email, admin_password }
+    The company email is the unique identifier — the same email cannot be used twice.
+    """
+    data = request.json or {}
+    company_name   = (data.get('company_name')   or '').strip()
+    company_email  = (data.get('company_email')  or '').strip().lower()
+    admin_username = (data.get('admin_username') or '').strip()
+    admin_email    = (data.get('admin_email')    or '').strip()
+    admin_password = (data.get('admin_password') or '').strip()
+
+    # Validation — all fields required
+    if not all([company_name, company_email, admin_username, admin_email, admin_password]):
+        return jsonify({'error': 'All fields are required.'}), 400
+
+    # Basic email format check
+    import re as _re
+    if not _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', company_email):
+        return jsonify({'error': 'Company email address is not valid.'}), 400
+    if not _re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', admin_email):
+        return jsonify({'error': 'Admin email address is not valid.'}), 400
+
+    if len(admin_password) < 6:
+        return jsonify({'error': 'Password must be at least 6 characters.'}), 400
+
+    # Check email uniqueness — company email is the unique identifier
+    if Company.email_exists(company_email):
+        return jsonify({'error': 'This company email is already registered. Please sign in instead.'}), 409
+
+    # Atomic creation — company + admin in one transaction
+    ok, result = Company.register_with_admin(
+        company_name, company_email, admin_username, admin_password, admin_email
+    )
+    if not ok:
+        return jsonify({'error': f'Registration failed: {result}'}), 500
+
+    audit_log('COMPANY_REGISTERED', None, None,
+              f"New company '{company_name}' ({company_email}) registered with admin '{admin_username}'")
+    logger.info(f"New company registered: {company_name} ({company_email})")
+    return jsonify({'success': True, 'company_name': company_name})
+
+
+
+@app.route('/api/admin/users/bulk', methods=['POST'])
+@login_required
+def bulk_create_users():
+    """
+    Bulk-create employees from a CSV file upload.
+    CSV columns (with header): username, email, password
+    """
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file uploaded.'}), 400
+
+    file = request.files['file']
+    if not file.filename:
+        return jsonify({'error': 'Empty filename.'}), 400
+
+    import io, csv
+    try:
+        stream = io.StringIO(file.stream.read().decode('utf-8-sig'), newline=None)
+        reader = csv.DictReader(stream)
+
+        # Normalise header names (lowercase + strip)
+        if reader.fieldnames is None:
+            return jsonify({'error': 'CSV has no headers. Expected: username, email, password'}), 400
+        headers = [h.strip().lower() for h in reader.fieldnames]
+        if not all(h in headers for h in ['username', 'email', 'password']):
+            return jsonify({'error': 'CSV must have columns: username, email, password'}), 400
+
+        created, failed, errors = 0, 0, []
+        for i, row in enumerate(reader, start=2):  # start=2 because row 1 is header
+            # Remap with normalised keys
+            norm = {k.strip().lower(): (v or '').strip() for k, v in row.items()}
+            uname = norm.get('username', '')
+            email = norm.get('email', '')
+            pwd   = norm.get('password', '')
+
+            if not uname or not email or not pwd:
+                errors.append(f'Row {i}: missing username, email, or password.')
+                failed += 1
+                continue
+            if len(pwd) < 4:
+                errors.append(f'Row {i} ({uname}): password too short (min 4 chars).')
+                failed += 1
+                continue
+
+            ok = User.create_user(current_user.company_id, uname, pwd, email, role='employee')
+            if ok:
+                created += 1
+            else:
+                errors.append(f'Row {i} ({uname}): username already exists.')
+                failed += 1
+
+        audit_log('BULK_USER_UPLOAD', None, str(current_user.id),
+                  f"Bulk upload: {created} created, {failed} failed")
+        return jsonify({'success': True, 'created': created, 'failed': failed, 'errors': errors})
+
+    except Exception as e:
+        logger.error(f"Bulk upload error: {e}")
+        return jsonify({'error': f'Failed to parse CSV: {str(e)}'}), 500
 
 @app.route('/dashboard')
 @login_required
@@ -1635,6 +1760,96 @@ def list_escalated_tickets():
     except Exception as e:
         logger.error(f"Error fetching escalated tickets: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/admin/tickets', methods=['GET'])
+@login_required
+def admin_tickets_filtered():
+    """
+    Filtered ticket list for the Admin History view.
+    Query params:
+      - status        : comma-separated statuses, e.g. "escalated,in_progress"
+      - escalated_only: "true" → only escalated/in_progress/reopened
+      - raised_by     : username to filter by
+      - priority      : pred_priority value
+      - type          : pred_type value
+      - date_from     : YYYY-MM-DD
+      - date_to       : YYYY-MM-DD
+      - search        : free-text search on subject
+    """
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    try:
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        query = '''
+            SELECT t.id, t.subject, t.pred_type, t.pred_priority, t.pred_queue,
+                   t.timestamp, t.corrected, t.status, t.human_agent,
+                   t.resolution_notes, t.resolved_at,
+                   u.username as raised_by
+            FROM classified_tickets t
+            LEFT JOIN users u ON t.user_id = u.id
+            WHERE u.company_id = ?
+        '''
+        params = [current_user.company_id]
+
+        statuses = request.args.get('status', '').strip()
+        escalated_only = request.args.get('escalated_only', '').lower() == 'true'
+
+        if escalated_only:
+            query += " AND t.status IN ('escalated', 'in_progress', 'reopened')"
+        elif statuses:
+            status_list = [s.strip() for s in statuses.split(',') if s.strip()]
+            if status_list:
+                placeholders = ','.join('?' * len(status_list))
+                query += f" AND t.status IN ({placeholders})"
+                params.extend(status_list)
+
+        raised_by = request.args.get('raised_by', '').strip()
+        if raised_by:
+            query += " AND u.username = ?"
+            params.append(raised_by)
+
+        priority = request.args.get('priority', '').strip()
+        if priority:
+            query += " AND t.pred_priority = ?"
+            params.append(priority)
+
+        ticket_type = request.args.get('type', '').strip()
+        if ticket_type:
+            query += " AND t.pred_type = ?"
+            params.append(ticket_type)
+
+        date_from = request.args.get('date_from', '').strip()
+        if date_from:
+            query += " AND DATE(t.timestamp) >= ?"
+            params.append(date_from)
+
+        date_to = request.args.get('date_to', '').strip()
+        if date_to:
+            query += " AND DATE(t.timestamp) <= ?"
+            params.append(date_to)
+
+        search = request.args.get('search', '').strip()
+        if search:
+            query += " AND t.subject LIKE ?"
+            params.append(f'%{search}%')
+
+        query += " ORDER BY t.timestamp DESC"
+
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        tickets = [dict(row) for row in rows]
+        conn.close()
+
+        return jsonify(tickets)
+    except Exception as e:
+        logger.error(f"Error fetching filtered admin tickets: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 
 @app.route('/api/ticket/<ticket_id>/complete', methods=['POST'])
 @login_required

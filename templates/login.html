@@ -4,35 +4,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - ECE Agent</title>
+    <title>ECE Agent — Sign In</title>
     <link rel="stylesheet" href="/static/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
     <style>
-        .login-container {
+        /* ── Reset & layout ────────────────────────────────────── */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--bg-dark);
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            background: var(--bg-dark);
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
         }
 
-        .login-card {
+        /* animated gradient orbs in background */
+        body::before,
+        body::after {
+            content: '';
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.18;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        body::before {
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, #6366f1, transparent);
+            top: -150px;
+            left: -150px;
+            animation: driftA 12s ease-in-out infinite alternate;
+        }
+
+        body::after {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, #8b5cf6, transparent);
+            bottom: -120px;
+            right: -100px;
+            animation: driftB 14s ease-in-out infinite alternate;
+        }
+
+        @keyframes driftA {
+            to {
+                transform: translate(60px, 80px);
+            }
+        }
+
+        @keyframes driftB {
+            to {
+                transform: translate(-60px, -60px);
+            }
+        }
+
+        /* ── Page wrapper ────────────────────────────── */
+        .page {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 1000px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 28px;
+        }
+
+        /* ── Branding ────────────────────────────────── */
+        .brand {
+            text-align: center;
+        }
+
+        .brand-logo {
+            font-size: 3rem;
+            display: block;
+            margin-bottom: 6px;
+            filter: drop-shadow(0 0 24px rgba(99, 102, 241, 0.6));
+        }
+
+        .brand h1 {
+            font-size: 2.1rem;
+            font-weight: 800;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0 0 6px;
+        }
+
+        .brand p {
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            margin: 0;
+        }
+
+        /* ── Panel card (shared) ─────────────────────── */
+        .panel {
+            width: 100%;
             background: var(--bg-card);
-            padding: 40px;
+            border: 1px solid var(--border);
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-xl);
-            width: 100%;
-            max-width: 450px;
-            border: 1px solid var(--border);
             backdrop-filter: var(--glass-blur);
-            -webkit-backdrop-filter: var(--glass-blur);
-            animation: slideUp 0.6s ease-out;
+            animation: slideUp 0.45s ease-out;
+            overflow: hidden;
         }
 
         @keyframes slideUp {
             from {
                 opacity: 0;
-                transform: translateY(30px);
+                transform: translateY(24px);
             }
 
             to {
@@ -41,103 +134,804 @@
             }
         }
 
-        .login-header {
+        .panel-header {
+            padding: 20px 28px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .panel-header h2 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .panel-header p {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            margin: 2px 0 0;
+        }
+
+        .panel-body {
+            padding: 24px 28px 28px;
+        }
+
+        /* ── Company Picker panel ────────────────────── */
+        #pickerPanel {
+            max-width: 900px;
+        }
+
+        .picker-toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+
+        .picker-search {
+            flex: 1;
+            min-width: 200px;
+            padding: 9px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 0.88rem;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .picker-search:focus {
+            border-color: var(--primary);
+        }
+
+        /* Company cards grid */
+        .company-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+            gap: 12px;
+            max-height: 380px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .company-grid::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .company-grid::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        .company-card {
+            position: relative;
+            padding: 18px 16px;
+            border: 1.5px solid var(--border);
+            border-radius: 12px;
+            background: var(--bg-card);
+            cursor: pointer;
+            transition: all 0.2s ease;
             text-align: center;
-            margin-bottom: 30px;
+            user-select: none;
         }
 
-        .login-header h1 {
-            font-size: 2rem;
-            margin-bottom: 10px;
-            background: var(--gradient-primary);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+        .company-card:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.06);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.15);
         }
 
-        .login-header p {
+        .company-card-icon {
+            font-size: 1.9rem;
+            margin-bottom: 8px;
+            display: block;
+            filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.2));
+        }
+
+        .company-card-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            word-break: break-word;
+        }
+
+        .company-card-badge {
+            margin-top: 6px;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* "No companies" empty state */
+        .no-companies {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 40px 16px;
+            color: var(--text-muted);
+        }
+
+        .no-companies span {
+            font-size: 2.5rem;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        /* skeleton loaders */
+        @keyframes shimmer {
+            0% {
+                background-position: -400px 0;
+            }
+
+            100% {
+                background-position: 400px 0;
+            }
+        }
+
+        .sk {
+            background: linear-gradient(90deg, var(--border) 25%, rgba(0, 0, 0, 0.04) 50%, var(--border) 75%);
+            background-size: 400px 100%;
+            animation: shimmer 1.2s infinite linear;
+            border-radius: 6px;
+        }
+
+        .sk-card {
+            height: 110px;
+            border-radius: 12px;
+        }
+
+        .picker-footer {
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .picker-footer p {
+            margin: 0;
+            font-size: 0.82rem;
             color: var(--text-secondary);
         }
 
-        .flash-messages {
+        /* ── Login panel ──────────────────────────────── */
+        #loginPanel {
+            max-width: 440px;
+        }
+
+        .selected-company-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(99, 102, 241, 0.08);
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            border-radius: 8px;
+            padding: 10px 14px;
             margin-bottom: 20px;
         }
 
-        .flash-message {
-            padding: 12px;
-            border-radius: var(--radius-sm);
-            margin-bottom: 10px;
+        .selected-company-badge span.icon {
+            font-size: 1.3rem;
+        }
+
+        .selected-company-badge .company-title {
+            font-weight: 600;
             font-size: 0.9rem;
+            color: var(--primary);
+        }
+
+        .change-btn {
+            margin-left: auto;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 3px 8px;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            background: transparent;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .change-btn:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        /* Form helpers */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .form-group input:focus {
+            border-color: var(--primary);
+        }
+
+        .pwd-wrap {
+            position: relative;
+        }
+
+        .pwd-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 1rem;
+            padding: 0;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            width: 100%;
+            padding: 11px;
+            border: none;
+            border-radius: 8px;
+            background: var(--gradient-primary);
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.15s, transform 0.1s;
+            margin-top: 8px;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.92;
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-outline {
+            width: 100%;
+            padding: 10px;
+            border: 1.5px solid var(--border);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.88rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            margin-top: 6px;
+        }
+
+        .btn-outline:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* Error / success inline */
+        .alert {
+            padding: 11px 14px;
+            border-radius: 8px;
+            font-size: 0.84rem;
+            margin-bottom: 16px;
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.1);
+            color: #EF4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10B981;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        /* ── Registration panel ───────────────────────── */
+        #registerPanel {
+            max-width: 560px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .section-divider {
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin: 20px 0 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-divider::before,
+        .section-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* strength bar */
+        .pwd-strength {
+            height: 4px;
+            border-radius: 2px;
+            margin-top: 5px;
+            transition: all 0.3s;
+            background: var(--border);
+        }
+
+        .str-0 {
+            width: 20%;
+            background: #EF4444;
+        }
+
+        .str-1 {
+            width: 40%;
+            background: #F97316;
+        }
+
+        .str-2 {
+            width: 65%;
+            background: #F59E0B;
+        }
+
+        .str-3 {
+            width: 85%;
+            background: #10B981;
+        }
+
+        .str-4 {
+            width: 100%;
+            background: #059669;
+        }
+
+        /* Flash messages from server */
+        .flash-messages {
+            margin-bottom: 16px;
+        }
+
+        .flash-message {
+            padding: 11px 14px;
+            border-radius: 8px;
+            font-size: 0.84rem;
+            margin-bottom: 8px;
         }
 
         .flash-success {
             background: rgba(16, 185, 129, 0.1);
-            color: var(--success);
+            color: #10B981;
             border: 1px solid rgba(16, 185, 129, 0.2);
-            backdrop-filter: var(--glass-blur);
         }
 
         .flash-error {
             background: rgba(239, 68, 68, 0.1);
-            color: var(--danger);
+            color: #EF4444;
             border: 1px solid rgba(239, 68, 68, 0.2);
-            backdrop-filter: var(--glass-blur);
+        }
+
+        /* Panel visibility */
+        .panel-hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 600px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .company-grid {
+                grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="login-container">
-        <div class="login-card">
-            <div class="login-header">
-                <div class="logo-icon" style="margin: 0 auto 20px; width: 60px; height: 60px; font-size: 2rem;">🎫</div>
-                <h1>Welcome Back</h1>
-                <p>Sign in to your ECE Agent account</p>
+    <div class="page">
+
+        <!-- Brand -->
+        <div class="brand">
+            <span class="brand-logo" style="font-size:2.6rem; display:block; margin-bottom:6px;">🎫</span>
+            <h1>ECE Agent</h1>
+            <p>AI-powered enterprise support ticketing</p>
+        </div>
+
+        <!-- Flash messages (from Flask redirects) -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages" style="width:100%;max-width:440px;">
+            {% for category, message in messages %}
+            <div class="flash-message flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- PANEL 1 — Company Picker                    -->
+        <!-- ═══════════════════════════════════════════ -->
+        <div class="panel" id="pickerPanel">
+            <div class="panel-header">
+                <div>
+                    <h2>Select Your Organisation</h2>
+                    <p>Choose your company to sign in, or register a new one below.</p>
+                </div>
             </div>
+            <div class="panel-body">
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-            <div class="flash-messages">
-                {% for category, message in messages %}
-                <div class="flash-message flash-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            </div>
-            {% endif %}
-            {% endwith %}
-
-            <form method="POST" action="/login" class="ticket-form">
-                <div class="form-group">
-                    <label for="company">Company</label>
-                    <input list="companies" name="company" id="company" placeholder="Select or type company name..."
-                        required autocomplete="off">
-                    <datalist id="companies">
-                        {% for company in companies %}
-                        <option value="{{ company }}">
-                            {% endfor %}
-                    </datalist>
+                <div class="picker-toolbar">
+                    <input class="picker-search" id="companySearch" type="text" placeholder="Search companies…"
+                        oninput="filterCards()" autocomplete="off">
                 </div>
 
-                <div class="form-group">
-                    <label for="username">User ID / Username</label>
-                    <input type="text" name="username" id="username" placeholder="Enter your ID" required>
+                <div class="company-grid" id="companyGrid">
+                    <!-- Skeleton loaders -->
+                    <div class="sk sk-card"></div>
+                    <div class="sk sk-card"></div>
+                    <div class="sk sk-card"></div>
+                    <div class="sk sk-card"></div>
                 </div>
 
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <input type="password" name="password" id="password" placeholder="Enter password" required>
+                <div class="picker-footer">
+                    <p>New to ECE Agent?</p>
+                    <button class="btn-outline" style="width:auto; padding:8px 20px;" onclick="showPanel('register')">
+                        Register New Company
+                    </button>
                 </div>
 
-                <button type="submit" class="submit-btn"
-                    style="width: 100%; justify-content: center; margin-top: 10px;">
-                    Sign In
-                </button>
-            </form>
-
-            <div class="footer" style="margin-top: 20px; border: none; padding: 0;">
-                <p>Need help? Contact system administrator.</p>
             </div>
         </div>
-    </div>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- PANEL 2 — Login                             -->
+        <!-- ═══════════════════════════════════════════ -->
+        <div class="panel panel-hidden" id="loginPanel">
+            <div class="panel-header">
+                <div>
+                    <h2>Sign In</h2>
+                    <p>Enter your credentials to access the dashboard.</p>
+                </div>
+            </div>
+            <div class="panel-body">
+
+                <div class="selected-company-badge" id="selectedBadge">
+                    <span class="icon">🏢</span>
+                    <div>
+                        <div class="company-title" id="selectedCompanyName">—</div>
+                        <div style="font-size:0.75rem; color:var(--text-muted);">Selected organisation</div>
+                    </div>
+                    <button class="change-btn" onclick="showPanel('picker')">Change</button>
+                </div>
+
+                <div id="loginAlert"></div>
+
+                <form id="loginForm" onsubmit="submitLogin(event)">
+                    <input type="hidden" id="hiddenCompany" name="company">
+
+                    <div class="form-group">
+                        <label for="loginUsername">Username</label>
+                        <input type="text" id="loginUsername" name="username" placeholder="Enter your username" required
+                            autocomplete="username">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="loginPassword">Password</label>
+                        <div class="pwd-wrap">
+                            <input type="password" id="loginPassword" name="password" placeholder="Enter your password"
+                                required autocomplete="current-password">
+                            <button type="button" class="pwd-toggle"
+                                onclick="togglePwd('loginPassword', this)">👁</button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary" id="loginBtn">Sign In →</button>
+                </form>
+
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════ -->
+        <!-- PANEL 3 — Register Company                  -->
+        <!-- ═══════════════════════════════════════════ -->
+        <div class="panel panel-hidden" id="registerPanel">
+            <div class="panel-header">
+                <div>
+                    <h2>Register Your Organisation</h2>
+                    <p>Set up your company on ECE Agent in under 60 seconds.</p>
+                </div>
+            </div>
+            <div class="panel-body">
+
+                <div id="registerAlert"></div>
+
+                <form id="registerForm" onsubmit="submitRegister(event)" novalidate>
+
+                    <div class="section-divider">Company Details</div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Company / Organisation Name *</label>
+                            <input type="text" id="regCompanyName" placeholder="Acme Corp" required
+                                oninput="validateCompanyName()">
+                        </div>
+                        <div class="form-group">
+                            <label>Company Email *</label>
+                            <input type="email" id="regCompanyEmail" placeholder="contact@acme.com" required>
+                        </div>
+                    </div>
+
+                    <div class="section-divider">Admin Account</div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Admin Username *</label>
+                            <input type="text" id="regAdminUsername" placeholder="admin" required
+                                autocomplete="new-password">
+                        </div>
+                        <div class="form-group">
+                            <label>Admin Email *</label>
+                            <input type="email" id="regAdminEmail" placeholder="admin@acme.com" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Password * <small style="color:var(--text-muted)">(min 6 chars)</small></label>
+                            <div class="pwd-wrap">
+                                <input type="password" id="regPassword" placeholder="Strong password" required
+                                    minlength="6" autocomplete="new-password" oninput="updateStrength()">
+                                <button type="button" class="pwd-toggle"
+                                    onclick="togglePwd('regPassword', this)">👁</button>
+                            </div>
+                            <div class="pwd-strength" id="strengthBar"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Confirm Password *</label>
+                            <div class="pwd-wrap">
+                                <input type="password" id="regConfirm" placeholder="Repeat password" required
+                                    autocomplete="new-password">
+                                <button type="button" class="pwd-toggle"
+                                    onclick="togglePwd('regConfirm', this)">👁</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary" id="regBtn">Create Account &amp; Sign Up</button>
+                    <button type="button" class="btn-outline" onclick="showPanel('picker')">
+                        ← Back to Company List
+                    </button>
+                </form>
+
+            </div>
+        </div>
+
+    </div><!-- .page -->
+
+    <script>
+        // ─── State ────────────────────────────────────────────────
+        let allCompanies = [];
+        let selectedCompany = '';
+
+        // ─── Panel switching ──────────────────────────────────────
+        function showPanel(which) {
+            ['pickerPanel', 'loginPanel', 'registerPanel'].forEach(id =>
+                document.getElementById(id).classList.add('panel-hidden')
+            );
+            const map = { picker: 'pickerPanel', login: 'loginPanel', register: 'registerPanel' };
+            const el = document.getElementById(map[which]);
+            el.classList.remove('panel-hidden');
+            // Trigger re-animation
+            el.style.animation = 'none';
+            void el.offsetWidth;
+            el.style.animation = '';
+        }
+
+        // ─── Company picker ───────────────────────────────────────
+        async function loadCompanies() {
+            try {
+                const res = await fetch('/api/companies');
+                const data = await res.json();
+                allCompanies = data.companies || [];
+                renderCards(allCompanies);
+            } catch (e) {
+                document.getElementById('companyGrid').innerHTML =
+                    '<div class="no-companies"><span>⚠️</span><p>Could not load companies.</p></div>';
+            }
+        }
+
+        function renderCards(list) {
+            const grid = document.getElementById('companyGrid');
+            if (!list.length) {
+                grid.innerHTML = '<div class="no-companies"><span>🏢</span><p>No companies registered yet.<br>Be the first to <strong>Register New Company</strong>!</p></div>';
+                return;
+            }
+            // Pick a deterministic emoji based on name
+            const icons = ['🏢', '🏬', '🏭', '🏗️', '🏦', '🏪', '🎯', '💼', '🔬', '🖥️', '🌐', '🚀'];
+            grid.innerHTML = list.map(c => {
+                const icon = icons[c.name.charCodeAt(0) % icons.length];
+                return `
+                <div class="company-card" onclick="selectCompany('${c.name.replace(/'/g, "\\'")}')">
+                    <span class="company-card-icon">${icon}</span>
+                    <div class="company-card-name">${escHtml(c.name)}</div>
+                    <div class="company-card-badge">Click to sign in</div>
+                </div>`;
+            }).join('');
+        }
+
+        function filterCards() {
+            const q = document.getElementById('companySearch').value.toLowerCase();
+            const filtered = allCompanies.filter(c => c.name.toLowerCase().includes(q));
+            renderCards(filtered);
+        }
+
+        function selectCompany(name) {
+            selectedCompany = name;
+            document.getElementById('selectedCompanyName').textContent = name;
+            document.getElementById('hiddenCompany').value = name;
+            document.getElementById('loginAlert').innerHTML = '';
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
+            showPanel('login');
+            setTimeout(() => document.getElementById('loginUsername').focus(), 200);
+        }
+
+        // ─── Login ────────────────────────────────────────────────
+        async function submitLogin(e) {
+            e.preventDefault();
+            const btn = document.getElementById('loginBtn');
+            btn.disabled = true;
+            btn.textContent = 'Signing in…';
+            setAlert('loginAlert', '', '');
+
+            const body = new URLSearchParams({
+                company: document.getElementById('hiddenCompany').value,
+                username: document.getElementById('loginUsername').value,
+                password: document.getElementById('loginPassword').value,
+            });
+
+            try {
+                // Use standard form POST so Flask session/redirect works
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/login';
+                form.style.display = 'none';
+                ['company', 'username', 'password'].forEach(k => {
+                    const inp = document.createElement('input');
+                    inp.name = k;
+                    inp.value = body.get(k);
+                    form.appendChild(inp);
+                });
+                document.body.appendChild(form);
+                form.submit();
+            } catch (err) {
+                setAlert('loginAlert', 'error', 'Network error. Please try again.');
+                btn.disabled = false;
+                btn.textContent = 'Sign In →';
+            }
+        }
+
+        // ─── Registration ─────────────────────────────────────────
+        async function submitRegister(e) {
+            e.preventDefault();
+            setAlert('registerAlert', '', '');
+
+            const pwd = document.getElementById('regPassword').value;
+            const cfm = document.getElementById('regConfirm').value;
+            if (pwd !== cfm) {
+                return setAlert('registerAlert', 'error', 'Passwords do not match.');
+            }
+            if (pwd.length < 6) {
+                return setAlert('registerAlert', 'error', 'Password must be at least 6 characters.');
+            }
+
+            const btn = document.getElementById('regBtn');
+            btn.disabled = true;
+            btn.textContent = 'Creating account…';
+
+            try {
+                const res = await fetch('/api/register-company', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        company_name: document.getElementById('regCompanyName').value.trim(),
+                        company_email: document.getElementById('regCompanyEmail').value.trim(),
+                        admin_username: document.getElementById('regAdminUsername').value.trim(),
+                        admin_email: document.getElementById('regAdminEmail').value.trim(),
+                        admin_password: pwd,
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    setAlert('registerAlert', 'success',
+                        `✅ "${data.company_name}" registered! Redirecting to sign in…`);
+                    // Refresh company list and auto-select the new company
+                    await loadCompanies();
+                    setTimeout(() => {
+                        document.getElementById('registerForm').reset();
+                        document.getElementById('strengthBar').className = 'pwd-strength';
+                        selectCompany(data.company_name);
+                    }, 1500);
+                } else {
+                    setAlert('registerAlert', 'error', data.error || 'Registration failed.');
+                }
+            } catch (err) {
+                setAlert('registerAlert', 'error', 'Network error. Please try again.');
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Create Account & Sign Up';
+        }
+
+        // ─── Helpers ──────────────────────────────────────────────
+        function setAlert(containerId, type, msg) {
+            const el = document.getElementById(containerId);
+            if (!type || !msg) { el.innerHTML = ''; return; }
+            el.innerHTML = `<div class="alert alert-${type}">${escHtml(msg)}</div>`;
+        }
+
+        function escHtml(str) {
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function togglePwd(inputId, btn) {
+            const inp = document.getElementById(inputId);
+            if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+            else { inp.type = 'password'; btn.textContent = '👁'; }
+        }
+
+        function updateStrength() {
+            const val = document.getElementById('regPassword').value;
+            const bar = document.getElementById('strengthBar');
+            let score = 0;
+            if (val.length >= 6) score++;
+            if (val.length >= 10) score++;
+            if (/[A-Z]/.test(val)) score++;
+            if (/[0-9]/.test(val)) score++;
+            if (/[^A-Za-z0-9]/.test(val)) score++;
+            bar.className = `pwd-strength str-${Math.min(score, 4)}`;
+        }
+
+        function validateCompanyName() {
+            // Could add debounced uniqueness check here if needed
+        }
+
+        // ─── Init ─────────────────────────────────────────────────
+        loadCompanies();
+    </script>
+
 </body>
 
 </html>
