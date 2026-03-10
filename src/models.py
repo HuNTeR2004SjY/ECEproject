@@ -352,3 +352,118 @@ class Company:
         companies = [dict(row) for row in cursor.fetchall()]
         conn.close()
         return companies
+
+
+class CompanySettings:
+    """
+    Per-company key-value integration settings store.
+    Backed by the company_integrations table.
+    """
+
+    @staticmethod
+    def get(company_id: int, key: str, default=None):
+        """Fetch a single setting value, or default if not set."""
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT value FROM company_integrations WHERE company_id = ? AND key = ?",
+            (company_id, key)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        return row[0] if row else default
+
+    @staticmethod
+    def get_all(company_id: int) -> dict:
+        """Return all settings for a company as a flat dict {key: value}."""
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT key, value FROM company_integrations WHERE company_id = ?",
+            (company_id,)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return {k: v for k, v in rows}
+
+    @staticmethod
+    def set(company_id: int, key: str, value: str):
+        """Upsert a single setting."""
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT INTO company_integrations (company_id, key, value, updated_at)
+               VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(company_id, key) DO UPDATE SET value=excluded.value,
+                   updated_at=CURRENT_TIMESTAMP""",
+            (company_id, key, value)
+        )
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def set_many(company_id: int, data: dict):
+        """Upsert multiple settings at once."""
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        for key, value in data.items():
+            cursor.execute(
+                """INSERT INTO company_integrations (company_id, key, value, updated_at)
+                   VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(company_id, key) DO UPDATE SET value=excluded.value,
+                       updated_at=CURRENT_TIMESTAMP""",
+                (company_id, key, str(value) if value is not None else '')
+            )
+        conn.commit()
+        conn.close()
+
+    # ── Config-shaped helpers ────────────────────────────────────────────────
+
+    @staticmethod
+    def get_jira_config(company_id: int) -> dict:
+        """Return a dict shaped for JiraIntegration(jira_config=...)."""
+        import config as _cfg
+        s = CompanySettings.get_all(company_id)
+        return {
+            'base_url':    s.get('jira_base_url',    _cfg.JIRA.get('base_url', '')),
+            'email':       s.get('jira_email',       _cfg.JIRA.get('email', '')),
+            'api_token':   s.get('jira_api_token',   _cfg.JIRA.get('api_token', '')),
+            'project_key': s.get('jira_project_key', _cfg.JIRA.get('project_key', 'IT')),
+            'enabled':     s.get('jira_enabled', 'true').lower() == 'true'
+                           if s.get('jira_enabled') else _cfg.JIRA.get('enabled', False),
+        }
+
+    @staticmethod
+    def get_slack_config(company_id: int) -> dict:
+        """Return a dict shaped for SlackIntegration(slack_config=...)."""
+        import config as _cfg
+        s = CompanySettings.get_all(company_id)
+        default_channels = _cfg.SLACK.get('channels', {})
+        return {
+            'enabled':        s.get('slack_enabled', 'true').lower() == 'true'
+                              if s.get('slack_enabled') else _cfg.SLACK.get('enabled', False),
+            'bot_token':      s.get('slack_bot_token',    _cfg.SLACK.get('bot_token', '')),
+            'signing_secret': s.get('slack_signing_secret', _cfg.SLACK.get('signing_secret', '')),
+            'channels': {
+                'it_support':  s.get('slack_ch_it',         default_channels.get('it_support',  'it-support')),
+                'escalations': s.get('slack_ch_escalations', default_channels.get('escalations', 'it-escalations')),
+                'incidents':   s.get('slack_ch_incidents',   default_channels.get('incidents',   'incidents')),
+                'logs':        s.get('slack_ch_logs',        default_channels.get('logs',        'ece-logs')),
+            },
+            'queue_channel_map': _cfg.SLACK.get('queue_channel_map', {}),
+        }
+
+    @staticmethod
+    def get_email_config(company_id: int) -> dict:
+        """Return a dict shaped for NotificationManager(email_config=...)."""
+        import config as _cfg
+        s = CompanySettings.get_all(company_id)
+        return {
+            'enabled':       s.get('email_enabled', 'true').lower() == 'true'
+                             if s.get('email_enabled') else _cfg.EMAIL_CONFIG.get('enabled', True),
+            'smtp_host':     s.get('smtp_host',     _cfg.EMAIL_CONFIG.get('smtp_host', 'smtp.gmail.com')),
+            'smtp_port':     int(s.get('smtp_port', _cfg.EMAIL_CONFIG.get('smtp_port', 587))),
+            'smtp_user':     s.get('smtp_user',     _cfg.EMAIL_CONFIG.get('smtp_user', '')),
+            'smtp_password': s.get('smtp_password', _cfg.EMAIL_CONFIG.get('smtp_password', '')),
+            'from_email':    s.get('from_email',    _cfg.EMAIL_CONFIG.get('from_email', '')),
+        }

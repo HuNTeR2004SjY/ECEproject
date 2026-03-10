@@ -40,7 +40,7 @@ import config
 from src.problem_solver_fixed import ProblemSolver
 from src.inference_service_full import TriageSpecialist
 from src.automation_specialist import AutomationSpecialist
-from src.models import User, Department, Company
+from src.models import User, Department, Company, CompanySettings
 from src.explainable_triage import ExplainableTriageWrapper
 from src.pattern_miner import PatternMiner
 from src.workflow_manager import WorkflowManager
@@ -75,7 +75,29 @@ xai_wrapper = ExplainableTriageWrapper()
 pattern_miner = PatternMiner(db_path=config.DATABASE_PATH)
 workflow_manager = None
 process_monitor = None
-jira_client = JiraIntegration()
+# ── Per-company integration factories ─────────────────────────────────────────
+# Instead of global singletons, each request builds an instance loaded with
+# the current company's settings from the DB.
+
+def get_jira() -> JiraIntegration:
+    """Return a JiraIntegration configured for the current user's company."""
+    try:
+        company_id = current_user.company_id if current_user and current_user.is_authenticated else None
+        cfg = CompanySettings.get_jira_config(company_id) if company_id else config.JIRA
+    except Exception:
+        cfg = config.JIRA
+    return JiraIntegration(jira_config=cfg)
+
+def get_slack() -> SlackIntegration:
+    """Return a SlackIntegration configured for the current user's company."""
+    try:
+        company_id = current_user.company_id if current_user and current_user.is_authenticated else None
+        cfg = CompanySettings.get_slack_config(company_id) if company_id else config.SLACK
+    except Exception:
+        cfg = config.SLACK
+    return SlackIntegration(slack_config=cfg)
+
+# Keep a startup-time global slack for socket mode (uses .env defaults)
 slack = SlackIntegration()
 
 # Ensure temp directories exist
@@ -208,7 +230,19 @@ def init_db_schema():
                 ip_address TEXT
             )
         ''')
-        
+
+        # Per-company integration settings (Jira, Slack, Email …)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS company_integrations (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id  INTEGER NOT NULL,
+                key         TEXT    NOT NULL,
+                value       TEXT,
+                updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(company_id, key)
+            )
+        ''')
+
         conn.commit()
         conn.close()
         logger.info("Database schema migrations completed.")
@@ -457,6 +491,126 @@ def bulk_create_users():
     except Exception as e:
         logger.error(f"Bulk upload error: {e}")
         return jsonify({'error': f'Failed to parse CSV: {str(e)}'}), 500
+
+
+# ── Integrations Settings API ───────────────────────────────────────────────
+
+SENSITIVE_KEYS = {'jira_api_token', 'slack_bot_token', 'slack_signing_secret', 'smtp_password'}
+
+@app.route('/api/admin/integrations', methods=['GET'])
+@login_required
+def get_integrations():
+    """Return all integration settings for the current company (secrets masked)."""
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    raw = CompanySettings.get_all(current_user.company_id)
+    # Mask sensitive fields so tokens never travel to the browser in plaintext
+    safe = {}
+    for k, v in raw.items():
+        safe[k] = '••••••••' if (k in SENSITIVE_KEYS and v) else (v or '')
+    # Also flag whether each secret is set (so the UI can show a "Configured" badge)
+    flags = {k: bool(raw.get(k)) for k in SENSITIVE_KEYS}
+    return jsonify({'success': True, 'settings': safe, 'flags': flags})
+
+
+@app.route('/api/admin/integrations', methods=['POST'])
+@login_required
+def save_integrations():
+    """Save integration settings for the current company."""
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.json or {}
+    to_save = {}
+
+    # ── Jira ──────────────────────────────────────────────────────────────────
+    if 'jira_base_url'    in data: to_save['jira_base_url']    = data['jira_base_url'].strip()
+    if 'jira_email'       in data: to_save['jira_email']       = data['jira_email'].strip()
+    if 'jira_project_key' in data: to_save['jira_project_key'] = data['jira_project_key'].strip().upper()
+    if 'jira_enabled'     in data: to_save['jira_enabled']     = 'true' if data['jira_enabled'] else 'false'
+    # Only update token if a real value was submitted (not the masked placeholder)
+    if data.get('jira_api_token') and data['jira_api_token'] != '••••••••':
+        to_save['jira_api_token'] = data['jira_api_token'].strip()
+
+    # ── Slack ─────────────────────────────────────────────────────────────────
+    if 'slack_enabled'       in data: to_save['slack_enabled']       = 'true' if data['slack_enabled'] else 'false'
+    if 'slack_ch_it'         in data: to_save['slack_ch_it']         = data['slack_ch_it'].strip().lstrip('#')
+    if 'slack_ch_escalations'in data: to_save['slack_ch_escalations']= data['slack_ch_escalations'].strip().lstrip('#')
+    if 'slack_ch_incidents'  in data: to_save['slack_ch_incidents']  = data['slack_ch_incidents'].strip().lstrip('#')
+    if 'slack_ch_logs'       in data: to_save['slack_ch_logs']       = data['slack_ch_logs'].strip().lstrip('#')
+    if data.get('slack_bot_token') and data['slack_bot_token'] != '••••••••':
+        to_save['slack_bot_token'] = data['slack_bot_token'].strip()
+    if data.get('slack_signing_secret') and data['slack_signing_secret'] != '••••••••':
+        to_save['slack_signing_secret'] = data['slack_signing_secret'].strip()
+
+    # ── Email / SMTP ─────────────────────────────────────────────────────────
+    if 'email_enabled' in data: to_save['email_enabled'] = 'true' if data['email_enabled'] else 'false'
+    if 'smtp_host'     in data: to_save['smtp_host']     = data['smtp_host'].strip()
+    if 'smtp_port'     in data: to_save['smtp_port']     = str(int(data.get('smtp_port', 587)))
+    if 'smtp_user'     in data: to_save['smtp_user']     = data['smtp_user'].strip()
+    if 'from_email'    in data: to_save['from_email']    = data['from_email'].strip()
+    if data.get('smtp_password') and data['smtp_password'] != '••••••••':
+        to_save['smtp_password'] = data['smtp_password']
+
+    if not to_save:
+        return jsonify({'error': 'No settings provided.'}), 400
+
+    CompanySettings.set_many(current_user.company_id, to_save)
+    audit_log('INTEGRATION_SETTINGS_SAVED', None, str(current_user.id),
+              f"Integration settings updated for company {current_user.company_id}")
+    return jsonify({'success': True, 'saved': list(to_save.keys())})
+
+
+@app.route('/api/admin/integrations/test', methods=['POST'])
+@login_required
+def test_integration():
+    """Quick connectivity test for a given integration type."""
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+    integration = (request.json or {}).get('integration', '')
+
+    if integration == 'jira':
+        try:
+            client = get_jira()
+            if not client.enabled:
+                return jsonify({'success': False, 'message': 'Jira is disabled or API token is missing.'})
+            # Attempt a lightweight API call
+            import requests as _req
+            from requests.auth import HTTPBasicAuth
+            r = _req.get(f"{client.base_url}/rest/api/3/myself",
+                         auth=HTTPBasicAuth(client.email, client.api_token),
+                         headers={"Accept": "application/json"}, timeout=6)
+            if r.ok:
+                return jsonify({'success': True, 'message': f'Connected as {r.json().get("displayName","?")} ({client.base_url})'})
+            return jsonify({'success': False, 'message': f'Jira returned {r.status_code}: {r.text[:120]}'})
+        except Exception as e:
+            return jsonify({'success': False, 'message': str(e)})
+
+    if integration == 'slack':
+        try:
+            s = get_slack()
+            if not s.enabled:
+                return jsonify({'success': False, 'message': 'Slack is disabled or bot token is missing.'})
+            resp = s.client.auth_test()
+            return jsonify({'success': True, 'message': f'Connected as @{resp["user"]} in {resp["team"]}'})
+        except Exception as e:
+            return jsonify({'success': False, 'message': str(e)})
+
+    if integration == 'email':
+        try:
+            import smtplib, ssl as _ssl
+            cfg = CompanySettings.get_email_config(current_user.company_id)
+            if not cfg.get('enabled'):
+                return jsonify({'success': False, 'message': 'Email is disabled.'})
+            ctx = _ssl.create_default_context()
+            with smtplib.SMTP_SSL(cfg['smtp_host'], 465, context=ctx, timeout=8) as s:
+                s.login(cfg['smtp_user'], cfg['smtp_password'])
+            return jsonify({'success': True, 'message': f'SMTP connection OK ({cfg["smtp_host"]})'})
+        except Exception as e:
+            return jsonify({'success': False, 'message': str(e)})
+
+    return jsonify({'error': 'Unknown integration type.'}), 400
+
 
 @app.route('/dashboard')
 @login_required

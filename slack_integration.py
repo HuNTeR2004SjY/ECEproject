@@ -43,13 +43,13 @@ class SlackIntegration:
     #   "create_incident"  → admin creates formal incident
     #   "send_comms"       → admin sends user comms for systemic alert
 
-    def __init__(self):
-        self.enabled = (
-            config.SLACK['enabled']
-            and bool(config.SLACK['bot_token'])
-        )
+    def __init__(self, slack_config: dict = None):
+        cfg = slack_config or config.SLACK
+        self.enabled = cfg.get('enabled', False) and bool(cfg.get('bot_token', ''))
+        self.channels = cfg.get('channels', config.SLACK.get('channels', {}))
+        self.queue_channel_map = cfg.get('queue_channel_map', config.SLACK.get('queue_channel_map', {}))
         if self.enabled:
-            self.client = WebClient(token=config.SLACK['bot_token'])
+            self.client = WebClient(token=cfg['bot_token'])
             self._channel_cache = {}
             logger.info("Slack integration enabled")
         else:
@@ -171,8 +171,8 @@ class SlackIntegration:
                 self._post_message(dm_channel, blocks, text="Ticket Received")
 
         # 2. Team Channel
-        channel_key = config.SLACK['queue_channel_map'].get(queue)
-        channel_name = config.SLACK['channels'].get(channel_key, config.SLACK['channels']['logs'])
+        channel_key = self.queue_channel_map.get(queue)
+        channel_name = self.channels.get(channel_key, self.channels.get('logs', 'ece-logs'))
         channel_id = self._get_channel_id(channel_name)
 
         if channel_id:
@@ -242,7 +242,7 @@ class SlackIntegration:
                 self._post_message(dm_channel, blocks, text="Solution Ready")
 
         # 2. Team Channel Update (Send broadly to logs)
-        channel_name = config.SLACK['channels']['logs']
+        channel_name = self.channels.get('logs', 'ece-logs')
         channel_id = self._get_channel_id(channel_name)
         if channel_id:
             blocks = self._build_blocks(
@@ -286,7 +286,7 @@ class SlackIntegration:
                 self._post_message(dm_channel, blocks, text="Ticket Escalated")
 
         # 2. Escalation Channel
-        channel_name = config.SLACK['channels']['escalations']
+        channel_name = self.channels.get('escalations', 'it-escalations')
         channel_id = self._get_channel_id(channel_name)
         if channel_id:
             ctx_text = "Please action within 30 min"
@@ -323,11 +323,10 @@ class SlackIntegration:
             )
 
             if jira_key:
-                # Append Jira button URL
                 blocks[3]["elements"].append({
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "📋 View in Jira"},
-                    "url": f"{config.JIRA['base_url']}/browse/{jira_key}"
+                    "text": {"type": "plain_text", "text": "View in Jira"},
+                    "url": f"{config.JIRA.get('base_url','')}/browse/{jira_key}"
                 })
 
             self._post_message(channel_id, blocks, text="Ticket Escalation Alert")
@@ -346,7 +345,7 @@ class SlackIntegration:
         if not self.enabled: return False
 
         severity_emoji = {"CRITICAL": "🔴", "HIGH": "🟠", "WATCH": "🟡"}.get(severity, "⚪")
-        channel_name = config.SLACK['channels']['incidents']
+        channel_name = self.channels.get('incidents', 'incidents')
         channel_id = self._get_channel_id(channel_name)
         
         if channel_id:
@@ -389,8 +388,8 @@ class SlackIntegration:
                 blocks[2]["fields"].append({"type": "mrkdwn", "text": f"*Jira Epic:* {epic_key}"})
                 blocks[5]["elements"].append({
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "📋 View Epic"},
-                    "url": f"{config.JIRA['base_url']}/browse/{epic_key}"
+                    "text": {"type": "plain_text", "text": "View Epic"},
+                    "url": f"{config.JIRA.get('base_url','')}/browse/{epic_key}"
                 })
             else:
                 blocks[2]["fields"].append({"type": "mrkdwn", "text": f"*Jira Epic:* Creating..."})

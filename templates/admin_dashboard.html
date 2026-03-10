@@ -360,6 +360,7 @@
                     <button class="nav-item" onclick="switchView('history', this)">Ticket History</button>
                     <button class="nav-item" onclick="switchView('users', this)">Users</button>
                     <button class="nav-item" onclick="switchView('settings', this)">Settings</button>
+                    <button class="nav-item" onclick="switchView('integrations', this)">Integrations</button>
                 </nav>
             </div>
             <div class="navbar-right">
@@ -753,6 +754,165 @@
                     </table>
                 </div>
             </div>
+
+            <!-- INTEGRATIONS SECTION -->
+            <div id="integrations" class="view-section">
+                <div class="section-header">
+                    <h2>Integrations</h2>
+                    <p>Configure Jira, Slack, and Email settings for your organisation. Credentials are stored
+                        per-company and never shared.</p>
+                </div>
+
+                <div id="intAlert" style="margin-bottom:16px;"></div>
+
+                <!-- Jira Card -->
+                <div class="recent-activity" style="margin-bottom:18px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+                        <div>
+                            <h3 style="margin:0;">Jira</h3>
+                            <p style="margin:4px 0 0; font-size:0.83rem; color:var(--text-secondary);">Link your Jira
+                                workspace so tickets are automatically created there.</p>
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <span id="jiraStatusBadge"
+                                style="display:none; font-size:0.72rem; font-weight:600; padding:3px 10px; border-radius:12px; background:rgba(16,185,129,0.12); color:#10B981;">Configured</span>
+                            <button class="cta-button"
+                                style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);padding:6px 14px;font-size:0.8rem;"
+                                onclick="testIntegration('jira', this)">Test</button>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                        <div class="form-group" style="margin:0;">
+                            <label>Jira Base URL</label>
+                            <input type="url" id="int_jira_base_url" placeholder="https://yourco.atlassian.net">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>Project Key</label>
+                            <input type="text" id="int_jira_project_key" placeholder="IT">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>Jira Account Email</label>
+                            <input type="email" id="int_jira_email" placeholder="admin@yourco.com">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>API Token <span style="font-size:0.75rem;color:var(--text-muted);">(leave blank to
+                                    keep existing)</span></label>
+                            <input type="password" id="int_jira_api_token" placeholder="Paste new token or leave blank">
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px; margin-top:14px;">
+                        <label style="display:flex;align-items:center;gap:6px;font-size:0.83rem;cursor:pointer;">
+                            <input type="checkbox" id="int_jira_enabled"> Enable Jira integration
+                        </label>
+                        <button class="cta-button" style="margin-left:auto;"
+                            onclick="saveIntegrationSection('jira')">Save Jira</button>
+                    </div>
+                </div>
+
+                <!-- Slack Card -->
+                <div class="recent-activity" style="margin-bottom:18px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+                        <div>
+                            <h3 style="margin:0;">Slack</h3>
+                            <p style="margin:4px 0 0; font-size:0.83rem; color:var(--text-secondary);">Connect your
+                                Slack workspace for ticket notifications and escalation alerts.</p>
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <span id="slackStatusBadge"
+                                style="display:none; font-size:0.72rem; font-weight:600; padding:3px 10px; border-radius:12px; background:rgba(16,185,129,0.12); color:#10B981;">Configured</span>
+                            <button class="cta-button"
+                                style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);padding:6px 14px;font-size:0.8rem;"
+                                onclick="testIntegration('slack', this)">Test</button>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                        <div class="form-group" style="margin:0;">
+                            <label>Bot Token <span
+                                    style="font-size:0.75rem;color:var(--text-muted);">(xoxb-…)</span></label>
+                            <input type="password" id="int_slack_bot_token"
+                                placeholder="Paste new token or leave blank">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>Signing Secret</label>
+                            <input type="password" id="int_slack_signing_secret"
+                                placeholder="Paste new secret or leave blank">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>IT Support channel</label>
+                            <input type="text" id="int_slack_ch_it" placeholder="it-support">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>Escalations channel</label>
+                            <input type="text" id="int_slack_ch_escalations" placeholder="it-escalations">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>Incidents channel</label>
+                            <input type="text" id="int_slack_ch_incidents" placeholder="incidents">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>Logs channel</label>
+                            <input type="text" id="int_slack_ch_logs" placeholder="ece-logs">
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px; margin-top:14px;">
+                        <label style="display:flex;align-items:center;gap:6px;font-size:0.83rem;cursor:pointer;">
+                            <input type="checkbox" id="int_slack_enabled"> Enable Slack integration
+                        </label>
+                        <button class="cta-button" style="margin-left:auto;"
+                            onclick="saveIntegrationSection('slack')">Save Slack</button>
+                    </div>
+                </div>
+
+                <!-- Email Card -->
+                <div class="recent-activity" style="margin-bottom:18px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+                        <div>
+                            <h3 style="margin:0;">Email / SMTP</h3>
+                            <p style="margin:4px 0 0; font-size:0.83rem; color:var(--text-secondary);">Configure
+                                outbound email for ticket notifications sent to your employees.</p>
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <span id="emailStatusBadge"
+                                style="display:none; font-size:0.72rem; font-weight:600; padding:3px 10px; border-radius:12px; background:rgba(16,185,129,0.12); color:#10B981;">Configured</span>
+                            <button class="cta-button"
+                                style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-primary);padding:6px 14px;font-size:0.8rem;"
+                                onclick="testIntegration('email', this)">Test</button>
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                        <div class="form-group" style="margin:0;">
+                            <label>SMTP Host</label>
+                            <input type="text" id="int_smtp_host" placeholder="smtp.gmail.com">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>SMTP Port</label>
+                            <input type="number" id="int_smtp_port" placeholder="587">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>SMTP Username</label>
+                            <input type="email" id="int_smtp_user" placeholder="yourbot@gmail.com">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>SMTP Password <span style="font-size:0.75rem;color:var(--text-muted);">(leave blank
+                                    to keep existing)</span></label>
+                            <input type="password" id="int_smtp_password"
+                                placeholder="Paste new password or leave blank">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label>From Email</label>
+                            <input type="email" id="int_from_email" placeholder="noreply@yourco.com">
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px; margin-top:14px;">
+                        <label style="display:flex;align-items:center;gap:6px;font-size:0.83rem;cursor:pointer;">
+                            <input type="checkbox" id="int_email_enabled"> Enable email notifications
+                        </label>
+                        <button class="cta-button" style="margin-left:auto;"
+                            onclick="saveIntegrationSection('email')">Save Email</button>
+                    </div>
+                </div>
+
+            </div> <!-- /integrations -->
 
         </main>
 
@@ -1484,6 +1644,131 @@
                 }
                 btn.disabled = false; btn.textContent = 'Upload Employees';
             }
+
+            // ── Integrations ──────────────────────────────────────────────────────
+
+            let _intSettings = {};   // cache of current non-sensitive settings
+            let _intFlags = {};   // cache of which sensitive keys are configured
+
+            async function loadIntegrations() {
+                try {
+                    const r = await fetch('/api/admin/integrations');
+                    const d = await r.json();
+                    if (!d.success) return;
+                    _intSettings = d.settings || {};
+                    _intFlags = d.flags || {};
+
+                    // Jira
+                    _set('int_jira_base_url', _intSettings.jira_base_url);
+                    _set('int_jira_email', _intSettings.jira_email);
+                    _set('int_jira_project_key', _intSettings.jira_project_key);
+                    document.getElementById('int_jira_enabled').checked = _intSettings.jira_enabled !== 'false';
+                    _badge('jiraStatusBadge', _intFlags.jira_api_token);
+
+                    // Slack
+                    _set('int_slack_ch_it', _intSettings.slack_ch_it);
+                    _set('int_slack_ch_escalations', _intSettings.slack_ch_escalations);
+                    _set('int_slack_ch_incidents', _intSettings.slack_ch_incidents);
+                    _set('int_slack_ch_logs', _intSettings.slack_ch_logs);
+                    document.getElementById('int_slack_enabled').checked = _intSettings.slack_enabled !== 'false';
+                    _badge('slackStatusBadge', _intFlags.slack_bot_token || _intFlags.slack_signing_secret);
+
+                    // Email
+                    _set('int_smtp_host', _intSettings.smtp_host);
+                    _set('int_smtp_port', _intSettings.smtp_port);
+                    _set('int_smtp_user', _intSettings.smtp_user);
+                    _set('int_from_email', _intSettings.from_email);
+                    document.getElementById('int_email_enabled').checked = _intSettings.email_enabled !== 'false';
+                    _badge('emailStatusBadge', _intFlags.smtp_password);
+                } catch (e) { console.error('loadIntegrations:', e); }
+            }
+
+            function _set(id, val) {
+                const el = document.getElementById(id);
+                if (el && val) el.value = val;
+            }
+            function _badge(id, show) {
+                const el = document.getElementById(id);
+                if (el) el.style.display = show ? 'inline-block' : 'none';
+            }
+            function _intAlert(msg, ok) {
+                const el = document.getElementById('intAlert');
+                const color = ok ? '#10B981' : '#EF4444';
+                const bg = ok ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)';
+                el.innerHTML = `<div style="padding:10px 16px;border-radius:8px;border:1px solid ${color}40;background:${bg};color:${color};font-size:0.84rem;">${msg}</div>`;
+                setTimeout(() => { if (el) el.innerHTML = ''; }, 4000);
+            }
+
+            async function saveIntegrationSection(type) {
+                let payload = {};
+                if (type === 'jira') {
+                    payload = {
+                        jira_base_url: document.getElementById('int_jira_base_url').value,
+                        jira_email: document.getElementById('int_jira_email').value,
+                        jira_project_key: document.getElementById('int_jira_project_key').value,
+                        jira_api_token: document.getElementById('int_jira_api_token').value,
+                        jira_enabled: document.getElementById('int_jira_enabled').checked,
+                    };
+                } else if (type === 'slack') {
+                    payload = {
+                        slack_bot_token: document.getElementById('int_slack_bot_token').value,
+                        slack_signing_secret: document.getElementById('int_slack_signing_secret').value,
+                        slack_ch_it: document.getElementById('int_slack_ch_it').value,
+                        slack_ch_escalations: document.getElementById('int_slack_ch_escalations').value,
+                        slack_ch_incidents: document.getElementById('int_slack_ch_incidents').value,
+                        slack_ch_logs: document.getElementById('int_slack_ch_logs').value,
+                        slack_enabled: document.getElementById('int_slack_enabled').checked,
+                    };
+                } else if (type === 'email') {
+                    payload = {
+                        smtp_host: document.getElementById('int_smtp_host').value,
+                        smtp_port: parseInt(document.getElementById('int_smtp_port').value || '587'),
+                        smtp_user: document.getElementById('int_smtp_user').value,
+                        smtp_password: document.getElementById('int_smtp_password').value,
+                        from_email: document.getElementById('int_from_email').value,
+                        email_enabled: document.getElementById('int_email_enabled').checked,
+                    };
+                }
+
+                try {
+                    const r = await fetch('/api/admin/integrations', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const d = await r.json();
+                    if (d.success) {
+                        _intAlert(`${type.charAt(0).toUpperCase() + type.slice(1)} settings saved.`, true);
+                        loadIntegrations();
+                    } else {
+                        _intAlert(d.error || 'Save failed.', false);
+                    }
+                } catch (e) { _intAlert('Network error.', false); }
+            }
+
+            async function testIntegration(type, btn) {
+                const orig = btn.textContent;
+                btn.disabled = true; btn.textContent = 'Testing…';
+                try {
+                    const r = await fetch('/api/admin/integrations/test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ integration: type })
+                    });
+                    const d = await r.json();
+                    _intAlert(d.message || (d.success ? 'Connected.' : 'Test failed.'), d.success);
+                } catch (e) { _intAlert('Network error.', false); }
+                btn.disabled = false; btn.textContent = orig;
+            }
+
+            // Hook into switchView so integrations load when tab is opened
+            const _origSwitchView = typeof switchView === 'function' ? switchView : null;
+            // Patch: override view switching to trigger loadIntegrations
+            document.addEventListener('click', function (e) {
+                if (e.target && e.target.onclick && e.target.textContent === 'Integrations') {
+                    loadIntegrations();
+                }
+            }, true);
         </script>
 
 
