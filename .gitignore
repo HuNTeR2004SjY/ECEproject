@@ -47,6 +47,8 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+test_report.html
+test_report*.html
 
 # Environments
 .env
@@ -70,6 +72,11 @@ trained_model/
 Project Context/*.pdf
 quality_report.json
 .DS_Store
+tmp/
+
+# OAuth / API credentials (never commit these)
+credentials.json
+token.json
 
 # Config
 config/
@@ -77,4 +84,3 @@ config.py
 config.yaml
 config.json
 .env
-token.json
