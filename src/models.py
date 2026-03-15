@@ -467,3 +467,162 @@ class CompanySettings:
             'smtp_password': s.get('smtp_password', _cfg.EMAIL_CONFIG.get('smtp_password', '')),
             'from_email':    s.get('from_email',    _cfg.EMAIL_CONFIG.get('from_email', '')),
         }
+
+class HumanTeamMember:
+    """Model for human team members available for escalation routing."""
+    
+    @staticmethod
+    def _ensure_tables():
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS ece_team_members (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER,
+                name      TEXT    NOT NULL,
+                email     TEXT    NOT NULL,
+                role      TEXT    NOT NULL,
+                skills    TEXT    NOT NULL,   -- comma-separated queue names
+                available INTEGER NOT NULL DEFAULT 1,
+                UNIQUE(company_id, email)
+            );
+
+            CREATE TABLE IF NOT EXISTS ece_assignments (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id  INTEGER,
+                ticket_id   TEXT    NOT NULL,
+                member_id   INTEGER NOT NULL,
+                assigned_at TEXT    NOT NULL,
+                resolved    INTEGER NOT NULL DEFAULT 0,
+                resolved_at TEXT
+            );
+        """)
+        conn.commit()
+        conn.close()
+
+    @staticmethod
+    def get_all(company_id: int):
+        HumanTeamMember._ensure_tables()
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM ece_team_members WHERE company_id = ? ORDER BY name ASC",
+            (company_id,)
+        )
+        members = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return members
+
+    @staticmethod
+    def get_available(company_id: int):
+        HumanTeamMember._ensure_tables()
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM ece_team_members WHERE company_id = ? AND available = 1",
+            (company_id,)
+        )
+        members = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return members
+
+    @staticmethod
+    def add(company_id: int, name: str, email: str, role: str, skills: str):
+        HumanTeamMember._ensure_tables()
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO ece_team_members (company_id, name, email, role, skills)
+                VALUES (?, ?, ?, ?, ?)
+            """, (company_id, name, email, role, skills))
+            conn.commit()
+            return True, cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return False, "A team member with this email already exists."
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    @staticmethod
+    def delete(member_id: int, company_id: int):
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM ece_team_members WHERE id = ? AND company_id = ?", (member_id, company_id))
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception:
+            return False
+        finally:
+            conn.close()
+
+    @staticmethod
+    def update_availability(member_id: int, company_id: int, available: bool):
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "UPDATE ece_team_members SET available = ? WHERE id = ? AND company_id = ?",
+                (1 if available else 0, member_id, company_id)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        except Exception:
+            return False
+        finally:
+            conn.close()
+            
+    @staticmethod
+    def _open_ticket_counts(company_id: int) -> dict:
+        """Return {member_id: open_ticket_count} for all members in a company."""
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        # count resolved=0 tickets for the given company
+        cursor.execute("""
+            SELECT member_id, COUNT(*) 
+            FROM ece_assignments 
+            WHERE resolved = 0 AND company_id = ? 
+            GROUP BY member_id
+        """, (company_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        return {row[0]: row[1] for row in rows}
+
+    @staticmethod
+    def record_assignment(company_id: int, ticket_id: str, member_id: int):
+        from datetime import datetime, timezone
+        HumanTeamMember._ensure_tables()
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO ece_assignments (company_id, ticket_id, member_id, assigned_at, resolved)
+                VALUES (?, ?, ?, ?, 0)
+            """, (company_id, ticket_id, member_id, datetime.now(timezone.utc).isoformat()))
+            conn.commit()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to record assignment: {e}")
+        finally:
+            conn.close()
+            
+    @staticmethod
+    def mark_resolved(ticket_id: str):
+        from datetime import datetime, timezone
+        conn = sqlite3.connect(config.DATABASE_PATH)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                UPDATE ece_assignments 
+                SET resolved = 1, resolved_at = ? 
+                WHERE ticket_id = ?
+            """, (datetime.now(timezone.utc).isoformat(), ticket_id))
+            conn.commit()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to mark resolved in ece_assignments: {e}")
+        finally:
+            conn.close()

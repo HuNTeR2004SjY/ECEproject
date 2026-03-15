@@ -40,7 +40,7 @@ import config
 from src.problem_solver_fixed import ProblemSolver
 from src.inference_service_full import TriageSpecialist
 from src.automation_specialist import AutomationSpecialist
-from src.models import User, Department, Company, CompanySettings
+from src.models import User, Department, Company, CompanySettings, HumanTeamMember
 from src.explainable_triage import ExplainableTriageWrapper
 from src.pattern_miner import PatternMiner
 from src.workflow_manager import WorkflowManager
@@ -612,6 +612,64 @@ def test_integration():
     return jsonify({'error': 'Unknown integration type.'}), 400
 
 
+# ── Team Members API ──────────────────────────────────────────────────────
+
+@app.route('/api/admin/team-members', methods=['GET', 'POST', 'DELETE', 'PATCH'])
+@login_required
+def admin_team_members():
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+        
+    if request.method == 'GET':
+        members = HumanTeamMember.get_all(current_user.company_id)
+        counts = HumanTeamMember._open_ticket_counts(current_user.company_id)
+        # Add open_tickets count to each member object for the UI
+        for m in members:
+            m['open_tickets'] = counts.get(m['id'], 0)
+        return jsonify({'members': members})
+        
+    if request.method == 'POST':
+        data = request.json
+        name = data.get('name')
+        email = data.get('email')
+        role = data.get('role', 'Support Specialist')
+        skills = data.get('skills', 'general')
+        
+        if not name or not email:
+            return jsonify({'error': 'Name and email are required'}), 400
+            
+        success, result = HumanTeamMember.add(current_user.company_id, name, email, role, skills)
+        if success:
+            return jsonify({'success': True, 'message': 'Team member added', 'id': result})
+        else:
+            return jsonify({'error': result}), 400
+            
+    if request.method == 'DELETE':
+        member_id = request.args.get('id')
+        if not member_id:
+            return jsonify({'error': 'Member ID required'}), 400
+            
+        success = HumanTeamMember.delete(member_id, current_user.company_id)
+        if success:
+            return jsonify({'success': True, 'message': 'Team member deleted'})
+        else:
+            return jsonify({'error': 'Failed to delete team member'}), 400
+
+    if request.method == 'PATCH':
+        data = request.json
+        member_id = data.get('id')
+        available = data.get('available')
+        
+        if member_id is None or available is None:
+            return jsonify({'error': 'Member ID and availability status required'}), 400
+            
+        success = HumanTeamMember.update_availability(member_id, current_user.company_id, available)
+        if success:
+            return jsonify({'success': True, 'message': 'Availability updated'})
+        else:
+            return jsonify({'error': 'Failed to update availability'}), 400
+
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
@@ -849,6 +907,7 @@ def predict():
                     'type': result['triage']['type'],
                     'priority': result['triage']['priority'],
                     'user_id': user_id_for_ticket,
+                    'company_id': current_user.company_id if current_user.is_authenticated else None,
                     'status': status
                 }
                 
@@ -1203,7 +1262,7 @@ def predict_stream():
                     ticket_data = {
                         'id': ticket_id, 'subject': subject, 'body': body,
                         'type': result['triage']['type'], 'priority': result['triage']['priority'],
-                        'user_id': user_id_str, 'status': status
+                        'user_id': user_id_str, 'company_id': user_company_id, 'status': status
                     }
                     # Append confirmation links for email
                     if not result.get('escalated') and result.get('solution'):

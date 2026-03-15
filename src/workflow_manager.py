@@ -63,6 +63,7 @@ class Ticket:
     body: str
     user_id: str
     user_email: str
+    company_id: Optional[int] = None
     created_at: datetime = field(default_factory=datetime.now)
     status: TicketStatus = TicketStatus.RECEIVED
     priority: str = "Medium"
@@ -226,6 +227,7 @@ class WorkflowManager:
         body: str,
         user_email: str,
         user_id: str = "unknown",
+        company_id: Optional[int] = None,
         ticket_id: str = None,
     ) -> WorkflowResult:
         """
@@ -262,6 +264,7 @@ class WorkflowManager:
             body=body,
             user_id=user_id,
             user_email=user_email,
+            company_id=company_id,
         )
         self._active_tickets[ticket.id] = ticket
 
@@ -494,6 +497,7 @@ class WorkflowManager:
                 'type': ticket.triage_result.get('type', '') if ticket.triage_result else '',
                 'priority': ticket.priority,
                 'user_id': ticket.user_id,
+                'company_id': ticket.company_id,
                 'status': 'escalated' if escalated else 'solution_proposed',
             }
 

@@ -359,6 +359,7 @@
                     <button class="nav-item active" onclick="switchView('overview', this)">Overview</button>
                     <button class="nav-item" onclick="switchView('history', this)">Ticket History</button>
                     <button class="nav-item" onclick="switchView('users', this)">Users</button>
+                    <button class="nav-item" onclick="switchView('team', this)">Team Members</button>
                     <button class="nav-item" onclick="switchView('settings', this)">Settings</button>
                     <button class="nav-item" onclick="switchView('integrations', this)">Integrations</button>
                 </nav>
@@ -713,6 +714,37 @@
                 </div>
             </div>
 
+            <!-- TEAM MEMBERS SECTION -->
+            <div id="team" class="view-section">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h2>Escalation Team Members</h2>
+                        <p>Manage human agents for ticket escalations.</p>
+                    </div>
+                    <button class="cta-button" onclick="openTeamMemberModal()">+ Add Member</button>
+                </div>
+                <div class="recent-activity">
+                    <table class="activity-table" id="teamTable">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Skills/Queues</th>
+                                <th>Open Tickets</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="teamTableBody">
+                            <tr>
+                                <td colspan="7">Loading team members...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- SETTINGS SECTION -->
             <div id="settings" class="view-section">
                 <div class="section-header">
@@ -1049,6 +1081,41 @@
             </div>
         </div>
 
+        <!-- Add Team Member Modal -->
+        <div id="addTeamMemberModal" class="modal"
+            style="display: none; align-items: center; justify-content: center; background: rgba(255,255,255,0.4); backdrop-filter: blur(5px);">
+            <div class="modal-content"
+                style="background: var(--bg-card); border: 1px solid var(--border); box-shadow: var(--shadow-xl); border-radius: var(--radius-lg); overflow: hidden; max-width: 450px; width: 90%;">
+                <div class="modal-header"
+                    style="background: rgba(0,0,0,0.03); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="font-size: 1.25rem; font-weight: 600;">Add Team Member</h2>
+                    <span class="close-modal"
+                        style="font-size: 1.5rem; cursor: pointer; color: var(--text-secondary);">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <form id="createTeamMemberForm">
+                        <div class="form-group">
+                            <label>Name</label>
+                            <input type="text" id="tmName" placeholder="e.g. Alex Chen" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="tmEmail" placeholder="alex@company.com" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Role</label>
+                            <input type="text" id="tmRole" placeholder="e.g. Senior Support Engineer" value="Support Specialist" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Skills / Queues <span style="font-size:0.75rem;color:var(--text-muted);">(comma-separated)</span></label>
+                            <input type="text" id="tmSkills" placeholder="hardware, network, general" required>
+                        </div>
+                        <button type="submit" class="cta-button" style="width: 100%; margin-top: 15px;">Add Member</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         <!-- Bulk Upload Modal -->
         <div id="bulkUploadModal" class="modal"
             style="display: none; align-items: center; justify-content: center; background: rgba(255,255,255,0.4); backdrop-filter: blur(5px);">
@@ -1127,6 +1194,7 @@
                 if (btn) btn.classList.add('active');
 
                 if (viewId === 'users') loadUsers();
+                if (viewId === 'team') loadTeamMembers();
                 if (viewId === 'settings') loadDepartments();
                 if (viewId === 'history') initHistory();
             }
@@ -1390,6 +1458,103 @@
                     }
                 } catch (e) {
                     alert('Error deleting user');
+                }
+            }
+
+            // ─── Team Members API ─────────────────────────────────────────────
+            async function loadTeamMembers() {
+                const tbody = document.getElementById('teamTableBody');
+                try {
+                    const res = await fetch('/api/admin/team-members');
+                    const data = await res.json();
+                    if (!data.members || data.members.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No team members found.</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = data.members.map(m => `
+                        <tr>
+                            <td style="font-weight:500;">${m.name}</td>
+                            <td>${m.email}</td>
+                            <td>${m.role}</td>
+                            <td><span style="font-size:0.8rem; background:rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px;">${m.skills}</span></td>
+                            <td><span style="font-weight:600; color:${m.open_tickets > 10 ? '#EF4444' : 'inherit'}">${m.open_tickets}</span></td>
+                            <td>
+                                <span style="display:inline-flex; align-items:center; gap:4px; font-size:0.8rem; cursor:pointer; background: ${m.available ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'}; color: ${m.available ? '#10B981' : '#EF4444'}; padding: 4px 8px; border-radius: 12px; font-weight: 500;" onclick="toggleAvailability(${m.id}, ${!m.available})">
+                                    <span style="display:inline-block; width:6px; height:6px; background:${m.available ? '#10B981' : '#EF4444'}; border-radius:50%;"></span>
+                                    ${m.available ? 'Available' : 'Unavailable'}
+                                </span>
+                            </td>
+                            <td>
+                                <button onclick="deleteTeamMember(${m.id})" class="btn-sm btn-claim" style="font-size: 0.75rem;">Remove</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                } catch (e) {
+                    tbody.innerHTML = '<tr><td colspan="7">Error loading team members</td></tr>';
+                }
+            }
+
+            function openTeamMemberModal() {
+                document.getElementById('addTeamMemberModal').style.display = 'flex';
+            }
+
+            document.getElementById('createTeamMemberForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const btn = e.target.querySelector('button');
+                btn.disabled = true;
+                try {
+                    const res = await fetch('/api/admin/team-members', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: document.getElementById('tmName').value,
+                            email: document.getElementById('tmEmail').value,
+                            role: document.getElementById('tmRole').value,
+                            skills: document.getElementById('tmSkills').value
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        document.getElementById('addTeamMemberModal').style.display = 'none';
+                        loadTeamMembers();
+                        e.target.reset();
+                    } else {
+                        alert(data.error);
+                    }
+                } catch (e) {
+                    alert('Error adding team member');
+                }
+                btn.disabled = false;
+            };
+
+            async function deleteTeamMember(id) {
+                if (!confirm('Remove this team member from the escalation router?')) return;
+                try {
+                    const res = await fetch(`/api/admin/team-members?id=${id}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.success) {
+                        loadTeamMembers();
+                    } else {
+                        alert(data.error);
+                    }
+                } catch (e) {
+                    alert('Error removing team member');
+                }
+            }
+
+            async function toggleAvailability(id, isAvailable) {
+                try {
+                    const res = await fetch('/api/admin/team-members', {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: id, available: isAvailable })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        loadTeamMembers();
+                    }
+                } catch (e) {
+                    alert('Error updating status');
                 }
             }
 

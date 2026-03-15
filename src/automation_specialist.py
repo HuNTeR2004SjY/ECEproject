@@ -1,4 +1,4 @@
-﻿"""
+"""
 AUTOMATION SPECIALIST
 =====================
 
@@ -836,323 +836,224 @@ class ExecutionEngine:
 
 class EscalationManager:
     """
-    Handles human escalations with intelligent routing
+    Handles human escalations with intelligent Smart Escalation routing.
+    Scores available HumanTeamMembers based on workload, skill match, and SLA urgency.
+    Fires Email, Slack, and Jira notifications via per-company integrations.
     """
     
     def __init__(self, notification_manager: NotificationManager):
-        """Initialize escalation manager"""
         self.notification_manager = notification_manager
         self.escalation_history = []
         logger.info("EscalationManager initialized")
-    
-    def _get_department_email(self, department_name: str, ticket: Dict) -> str:
-        """
-        Fetch department email dynamically from DB, falling back to static config.
-        """
-        # Default fallback
-        static_email = DEPARTMENT_ROUTING.get(department_name, {}).get('email', config.SUPPORT_EMAIL)
-        
-        try:
-            user_id = ticket.get('user_id')
-            if not user_id:
-                return static_email
-                
-            conn = sqlite3.connect(config.DATABASE_PATH)
-            cursor = conn.cursor()
-            
-            # 1. Get company_id from user
-            # user_id in ticket might be string or int in DB? 
-            # In app.py it saves user_id (str) into classified_tickets 'user_id' column if authenticated.
-            # But wait, classified_tickets user_id might be "unknown" if not authenticated?
-            # If so, we can't really do company specific routing easily without company info.
-            # Assuming authenticated users for now.
-            
-            cursor.execute("SELECT company_id FROM users WHERE id = ?", (user_id,))
-            row = cursor.fetchone()
-            if not row:
-                conn.close()
-                return static_email
-                
-            company_id = row[0]
-            
-            # 2. Get department email for this company
-            cursor.execute(
-                "SELECT email FROM departments WHERE company_id = ? AND name = ?", 
-                (company_id, department_name)
-            )
-            dept_row = cursor.fetchone()
-            conn.close()
-            
-            if dept_row:
-                return dept_row[0]
-            
-        except Exception as e:
-            logger.error(f"Error fetching dynamic department email: {e}")
-            
-        return static_email
 
-    def escalate_ticket(
-        self,
-        ticket: Dict,
-        reason: str,
-        user_email: str
-    ) -> Dict:
-        """
-        Escalate ticket to appropriate human team
-        
-        Args:
-            ticket: Ticket object
-            reason: Reason for escalation
-            user_email: User's email for notifications
-            
-        Returns:
-            Escalation record
-        """
+    def escalate_ticket(self, ticket: Dict, reason: str, user_email: str) -> Dict:
         logger.info(f"Escalating ticket {ticket['id']}: {reason}")
+        from src.models import HumanTeamMember, CompanySettings
+        from datetime import datetime, timezone
         
-        # Determine correct department
-        department = self._route_to_department(ticket)
-        # Use simple get for static config just for SLA/keywords, but EMAIL comes from DB
-        dept_config = DEPARTMENT_ROUTING.get(department, DEPARTMENT_ROUTING['IT'])
+        company_id = ticket.get('company_id')
+        if not company_id:
+            logger.warning(f"No company_id for ticket {ticket['id']}, cannot route to team member.")
+            return {'department': 'Fallback', 'reason': reason, 'priority': 'normal'}
+            
+        queue = ticket.get('type', ticket.get('queue', 'General'))
+        priority = ticket.get('priority', 'Medium')
         
-        # Dynamic Email Lookup
-        dept_email = self._get_department_email(department, ticket)
+        # 1. Score Members
+        members = HumanTeamMember.get_available(company_id)
+        open_counts = HumanTeamMember._open_ticket_counts(company_id)
         
-        # Calculate SLA deadline
-        sla_minutes = dept_config.get('escalation_sla', 60)
-        sla_deadline = datetime.now() + timedelta(minutes=sla_minutes)
+        scored = []
+        MAX_WORKLOAD = 20
+        for m in members:
+            open_tickets = open_counts.get(m['id'], 0)
+            if open_tickets >= MAX_WORKLOAD:
+                continue
+            wl_score = 1.0 - (open_tickets / MAX_WORKLOAD)
+            
+            # Skill score
+            skills_list = [s.strip().lower() for s in m['skills'].split(",")]
+            skill_score = 1.0 if queue.lower() in skills_list else 0.5 # Simplified keyword overlap
+            
+            # SLA score
+            urgency_score = {"High": 1.0, "Medium": 0.5, "Low": 0.2}.get(priority, 0.3)
+            
+            composite = round(0.60 * wl_score + 0.30 * skill_score + 0.10 * urgency_score, 4)
+            scored.append({
+                "id": m["id"],
+                "name": m["name"],
+                "email": m["email"],
+                "role": m["role"],
+                "skills": m["skills"],
+                "open_tickets": open_tickets,
+                "workload_score": wl_score,
+                "skill_score": skill_score,
+                "urgency_score": urgency_score,
+                "composite_score": composite,
+            })
+            
+        scored.sort(key=lambda x: x["composite_score"], reverse=True)
         
-        # Create escalation record
+        if not scored:
+            return {'department': 'Fallback', 'reason': 'No eligible agents', 'priority': priority}
+            
+        top = scored[0]
+        runner = scored[1] if len(scored) > 1 else None
+        
+        # Assign
+        HumanTeamMember.record_assignment(company_id, ticket['id'], top['id'])
+        
+        routing = {
+            "recommended_agent": top,
+            "runner_up": runner,
+            "reasoning": f"{top['name']} recommended (Score: {top['composite_score']:.0%})."
+        }
+        
+        # 2. Notify over channels independently
+        notifications_result = self._notify_all_channels(company_id, ticket, routing)
+        
         escalation = {
             'ticket_id': ticket['id'],
-            'department': department,
-            'department_email': dept_email,
+            'department': top['name'],
             'reason': reason,
             'escalated_at': datetime.now().isoformat(),
-            'escalated_by': 'automation_specialist',
-            'priority': self._calculate_escalation_priority(ticket, reason),
-            'sla_deadline': sla_deadline.isoformat(),
-            'sla_minutes': sla_minutes
+            'priority': priority,
+            'routing': routing,
+            'notifications': notifications_result
         }
-        
-        # Notify department
-        self._notify_department(department, escalation, ticket, dept_email)
-        
-        # Notify user
-        self._notify_user_escalation(ticket, department, user_email, escalation_data=escalation)
-        
-        # Log escalation
         self.escalation_history.append(escalation)
         
-        return escalation
-    
-    def _route_to_department(self, ticket: Dict) -> str:
-        """Determine which department should handle the ticket"""
-        ticket_type = ticket.get('type', '').lower()
-        ticket_text = f"{ticket.get('subject', '')} {ticket.get('body', '')}".lower()
-        
-        # Score each department
-        scores = {}
-        for dept, config in DEPARTMENT_ROUTING.items():
-            score = 0
-            
-            # Type match
-            if ticket_type in config['types']:
-                score += 2
-            
-            # Keyword matches
-            keyword_matches = sum(
-                1 for keyword in config['keywords']
-                if keyword in ticket_text
+        # Notify user (Fallback popup via UI stream, but we can standard email them)
+        try:
+            ticket_with_context = ticket.copy()
+            ticket_with_context['escalated_to_dept'] = top['name']
+            ticket_with_context['escalated_sla'] = 60
+            self.notification_manager.send_notification(
+                ticket=ticket_with_context,
+                event_type='escalated',
+                channels=[NotificationChannel.EMAIL, NotificationChannel.POPUP],
+                user_email=user_email,
+                user_id=ticket.get('user_id', 'unknown')
             )
-            score += keyword_matches
+        except Exception as e:
+            logger.error(f"Failed to notify user: {e}")
             
-            scores[dept] = score
+        return escalation
+
+    def _notify_all_channels(self, company_id: int, ticket: Dict, routing: Dict) -> Dict:
+        results = {}
+        try:
+            results["email"] = self._notify_email(company_id, ticket, routing)
+        except Exception as e:
+            results["email"] = f"failed: {e}"
         
-        # Return department with highest score
-        best_dept = max(scores, key=scores.get)
+        try:
+            results["slack"] = self._notify_slack(company_id, ticket, routing)
+        except Exception as e:
+            results["slack"] = f"failed: {e}"
+            
+        try:
+            results["jira"] = self._notify_jira(company_id, ticket, routing)
+        except Exception as e:
+            results["jira"] = f"failed: {e}"
+            
+        return results
+
+    def _notify_email(self, company_id: int, ticket: Dict, routing: Dict) -> str:
+        from src.models import CompanySettings
+        import smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
         
-        # Fallback to IT if no clear match
-        if scores[best_dept] == 0:
-            return 'IT'
+        cfg = CompanySettings.get_email_config(company_id)
+        if not cfg.get('enabled') or not cfg.get('smtp_password'):
+            return "skipped"
+            
+        agent = routing["recommended_agent"]
+        priority = ticket.get("priority", "Medium")
+        ticket_id = ticket.get("id", "UNKNOWN")
+        to_addr = agent["email"]
+        from_addr = cfg.get("from_email") or cfg.get("smtp_user", "")
         
-        return best_dept
-    
-    def _calculate_escalation_priority(self, ticket: Dict, reason: str) -> str:
-        """Calculate escalation priority"""
-        ticket_priority = ticket.get('priority', 'normal').lower()
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"[ECE Recommendation] You've been suggested for {priority}-priority ticket {ticket_id}"
+        msg["From"] = from_addr
+        msg["To"] = to_addr
         
-        # If already high priority or multiple failures, escalate as urgent
-        if ticket_priority in ['high', 'critical'] or 'failed' in reason.lower():
-            return 'urgent'
-        elif 'timeout' in reason.lower() or 'complex' in reason.lower():
-            return 'high'
-        else:
-            return 'normal'
-    
-    def _notify_department(self, department: str, escalation: Dict, ticket: Dict, email_override: Optional[str] = None):
-        """Send escalation email to department"""
-        # Use override if provided, else fallback to static config
-        dept_email = email_override
-        if not dept_email:
-            dept_email = DEPARTMENT_ROUTING.get(department, {}).get('email', config.SUPPORT_EMAIL)
+        text_body = f"Ticket {ticket_id}\nPriority: {priority}\nRecommended Agent: {agent['name']}"
+        msg.attach(MIMEText(text_body, "plain", "utf-8"))
         
-        # Create escalation notification
-        notification = {
-            'title': f"🚨 Ticket Escalation: #{ticket['id']}",
-            'message': f"Priority {escalation['priority']} ticket requires attention. Reason: {escalation['reason']}",
-            'priority': escalation['priority'],
-            'ticket_id': ticket['id'],
-            'timestamp': datetime.now().isoformat()
+        with smtplib.SMTP(cfg['smtp_host'], cfg['smtp_port'], timeout=10) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(cfg['smtp_user'], cfg['smtp_password'])
+            server.sendmail(from_addr, [to_addr], msg.as_bytes())
+            
+        return "sent"
+
+    def _notify_slack(self, company_id: int, ticket: Dict, routing: Dict) -> str:
+        from src.models import CompanySettings
+        cfg = CompanySettings.get_slack_config(company_id)
+        if not cfg.get('enabled') or not cfg.get('bot_token'):
+            return "skipped"
+            
+        try:
+            from slack_sdk import WebClient
+        except ImportError:
+            return "failed: slack_sdk not installed"
+            
+        client = WebClient(token=cfg['bot_token'])
+        channel = cfg.get('channels', {}).get('escalations', 'it-escalations')
+        tid = ticket.get("id", "UNKNOWN")
+        agent = routing["recommended_agent"]
+        
+        client.chat_postMessage(
+            channel=f"#{channel}",
+            text=f"Escalation recommendation for ticket {tid}: *{agent['name']}*",
+        )
+        return "sent"
+
+    def _notify_jira(self, company_id: int, ticket: Dict, routing: Dict) -> str:
+        from src.models import CompanySettings
+        import json
+        import urllib.request
+        from base64 import b64encode
+        
+        cfg = CompanySettings.get_jira_config(company_id)
+        if not cfg.get('enabled') or not cfg.get('api_token'):
+            return "skipped"
+            
+        issue_key = ticket.get("jira_key") or ticket.get("id", "")
+        if not issue_key or not cfg.get('base_url'):
+            return "skipped"
+            
+        url = f"{cfg['base_url'].rstrip('/')}/rest/api/3/issue/{issue_key}/comment"
+        agent = routing["recommended_agent"]
+        body_adf = {
+            "version": 1,
+            "type": "doc",
+            "content": [{
+                "type": "paragraph",
+                "content": [{"type": "text", "text": f"ECE Recommends agent: {agent['name']} for escalation."}]
+            }]
         }
         
-        # Generate detailed email content using Groq if available
-        email_body_html = ""
-        try:
-             if self.notification_manager.ai_email_generator.enabled:
-                # Prompt for Groq: Write an escalation email
-                context = f"Reason for escalation: {escalation['reason']}. This ticket has been escalated to {department}."
-                # We reuse the existing generator but might need a specific prompt method or just use the generic one
-                # Let's use the generic one with a strong context
-                ai_content = self.notification_manager.ai_email_generator.generate_email_content(
-                    ticket, 
-                    context=context
-                )
-                email_body_html = ai_content
-        except Exception as e:
-            logger.error(f"Groq generation failed for escalation: {e}")
+        payload = json.dumps({"body": body_adf}).encode("utf-8")
+        token = b64encode(f"{cfg['email']}:{cfg['api_token']}".encode()).decode()
+        
+        req = urllib.request.Request(url, data=payload, headers={
+            "Authorization": f"Basic {token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }, method="POST")
+        
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            status = resp.status
             
-        
-        # Fallback HTML if Groq fails or is disabled
-        if not email_body_html:
-            email_body_html = f"""
-            <div class="details">
-                <p><strong>Ticket ID:</strong> {ticket['id']}</p>
-                <p><strong>Priority:</strong> {escalation['priority']}</p>
-                <p><strong>Reason:</strong> {escalation['reason']}</p>
-                <p><strong>SLA Deadline:</strong> {escalation['sla_deadline']}</p>
-            </div>
-            
-            <h3>Ticket Details:</h3>
-            <p><strong>Subject:</strong> {ticket.get('subject', 'N/A')}</p>
-            <p><strong>Description:</strong> {ticket.get('body', 'N/A')}</p>
-            <p><strong>Type:</strong> {ticket.get('type', 'N/A')}</p>
-            """
-            
-        # Final HTML wrapper
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body {{ font-family: Arial, sans-serif; }}
-                .urgent {{ color: #dc2626; font-weight: bold; }}
-                .details {{ background: #f3f4f6; padding: 15px; margin: 15px 0; }}
-            </style>
-        </head>
-        <body>
-            <h2 class="urgent">🚨 Ticket Escalation Required</h2>
-            {email_body_html}
-            <p><a href="{config.APP_URL}/ticket/{ticket['id']}">View Full Details →</a></p>
-        </body>
-        </html>
-        """
-        
-        # Send email
-        try:
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = notification['title']
-            msg['From'] = self.notification_manager.email_config.get('from_email', 'noreply@ece-system.com')
-            msg['To'] = dept_email
-            msg.attach(MIMEText(html_content, 'html'))
-            
-            # Use notification manager's send method logic (checking enabled flag)
-            if self.notification_manager.email_config.get('enabled', False):
-                with smtplib.SMTP(
-                    self.notification_manager.email_config['smtp_host'],
-                    self.notification_manager.email_config['smtp_port']
-                ) as server:
-                    server.starttls()
-                    server.login(
-                        self.notification_manager.email_config['smtp_user'],
-                        self.notification_manager.email_config['smtp_password']
-                    )
-                    server.send_message(msg)
-                logger.info(f"Escalation email sent to {department} ({dept_email})")
-            else:
-                logger.info(f"Email disabled - would send escalation to {department} ({dept_email})")
-            
-        except Exception as e:
-            logger.error(f"Failed to send escalation email: {e}")
-    
-    def _notify_user_escalation(self, ticket: Dict, department: str, user_email: str, escalation_data: Optional[Dict] = None):
-        """Notify user that ticket has been escalated"""
-        
-        # Inject escalation details into notification context
-        # We need a way to pass 'department' and 'sla' to _create_notification
-        # Since send_notification takes ticket, we can temporarily augment it or 
-        # reliance on the message is too simple. 
-        # Best approach: NotificationManager._create_notification is rigid.
-        # Let's override the notification object construction inside send_notification? NO.
-        # Let's pass a modified ticket dict or rely on the Fact that NotificationManager is ours.
-        
-        # We will subclass or just hack the `ticket` dict passed to send_notification 
-        # to include 'escalation_context' which we use in HTML generation.
-        
-        # ACTUALLY, we modified _generate_email_html to look at notification dict.
-        # We need to ensure 'department' gets into notification dict.
-        # _create_notification is the gatekeeper.
-        # Let's modify send_notification to accept **kwargs? No, signature change = risky.
-        
-        # Workaround: Pass it in the 'ticket' object which flows through to _generate_email_html
-        # WE will rely on _create_notification mostly copying ID/Subject.
-        # _generate_email_html takes (notification, ticket).
-        # So if we put data in ticket, we can read it.
-        
-        sla = 60
-        if escalation_data:
-            sla = escalation_data.get('sla_minutes', 60)
-            
-        ticket_with_context = ticket.copy()
-        # We'll use these keys in our new HTML template logic
-        # But wait, our HTML logic above used `notification.get()`. 
-        # We should fix HTML logic to look at `ticket` OR
-        # Update `send_notification` to allow custom data.
-        
-        # Let's just update `NotificationManager` to extract these if present in ticket?
-        # Or better: Just put them in ticket_with_context and update HTML generation to read from ticket.
-        
-        # Correction on HTML replacement above: 
-        # I used `notification.get('department')`. This means I need it in notification.
-        # `_create_notification` returns the dict. 
-        # I should manually construct the notification payload for maximum control here?
-        # Or just update `_create_notification` to pull from ticket?
-        
-        # Let's assume for this specific requirement, we want to be explicit.
-        # We will manually call send_notification but we need to ensure the data is there.
-        
-        # Let's monkey-patch the notification dictionary inside send_notification? No.
-        
-        # HACK: We will pass the data as part of the ticket object, and update _create_notification
-        # to look for it.
-        
-        # Update: I will modify _create_notification in a separate chunk to copy these fields.
-        
-        ticket_with_context['escalated_to_dept'] = department
-        ticket_with_context['escalated_sla'] = sla
-        
-        self.notification_manager.send_notification(
-            ticket=ticket_with_context,
-            event_type='escalated',
-            channels=[NotificationChannel.EMAIL, NotificationChannel.POPUP],
-            user_email=user_email,
-            user_id=ticket.get('user_id', 'unknown')
-        )
+        if 200 <= status < 300:
+            return "sent"
+        return f"failed: HTTP {status}"
 
-
-# ============================================================================
-# STATUS TRACKER
-# ============================================================================
 
 class TicketStateMachine:
     """
