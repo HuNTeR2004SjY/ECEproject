@@ -69,7 +69,7 @@ cloudflared.exe
 *.sqlite
 data/
 trained_model/
-Project Context/*.pdf
+Project Context/
 quality_report.json
 .DS_Store
 tmp/
