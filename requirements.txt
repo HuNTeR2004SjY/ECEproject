@@ -12,3 +12,9 @@ requests>=2.31.0
 gunicorn
 slack-sdk>=3.27.0
 python-dotenv
+torch
+transformers
+APScheduler
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
