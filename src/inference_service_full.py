@@ -133,10 +133,10 @@ class TriageSpecialist:
         # Load trained weights
         print(f"  Loading trained weights...")
         try:
-            # Use mmap=True to save memory
+            # Use mmap=True to save memory (requires new zipfile format)
             checkpoint = torch.load(self.model_dir / 'model.pth', map_location=self.device, mmap=True, weights_only=False)
-        except TypeError:
-            # Fallback for older torch versions
+        except (TypeError, RuntimeError):
+            # Fallback for older torch versions or old-format .pth files
             checkpoint = torch.load(self.model_dir / 'model.pth', map_location=self.device, weights_only=False)
             
         self.model.load_state_dict(checkpoint['model_state_dict'])
