@@ -155,7 +155,6 @@ class TriageSpecialist:
             try:
                 checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
             except Exception as e:
-                import pickle
                 if isinstance(e, pickle.UnpicklingError) and "invalid load key, 'v'" in str(e):
                     raise RuntimeError("ERROR: model.pth is a Git LFS pointer. Please enable Git LFS on your deployment platform.") from e
                 raise
