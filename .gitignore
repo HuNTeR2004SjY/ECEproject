@@ -80,7 +80,6 @@ token.json
 
 # Config
 config/
-config.py
 config.yaml
 config.json
 .env
