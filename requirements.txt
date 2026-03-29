@@ -11,3 +11,4 @@ pandas
 requests>=2.31.0
 gunicorn
 slack-sdk>=3.27.0
+python-dotenv
