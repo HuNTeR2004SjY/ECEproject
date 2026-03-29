@@ -51,7 +51,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
-app.secret_key = os.urandom(24)
+app.secret_key = os.environ.get('SECRET_KEY', 'ece-fallback-secret-key-change-in-production')
 
 # Initialize Flask-Login
 from werkzeug.middleware.proxy_fix import ProxyFix
