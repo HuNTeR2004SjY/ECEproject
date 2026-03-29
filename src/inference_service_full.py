@@ -132,13 +132,34 @@ class TriageSpecialist:
         
         # Load trained weights
         print(f"  Loading trained weights...")
+        
+        # Check if the file is an LFS pointer before trying to load
+        model_path = self.model_dir / 'model.pth'
+        if model_path.exists():
+            with open(model_path, 'rb') as f:
+                header = f.read(10)
+                if header.startswith(b'version ht'):
+                    raise RuntimeError(
+                        f"\n{'='*60}\n"
+                        f"CRITICAL ERROR: The model file at '{model_path}' is a Git LFS pointer, not the actual weights!\n"
+                        f"This happens when you deploy to a platform (like Render, Railway, AWS) without Git LFS enabled.\n"
+                        f"To fix: Enable Git LFS on your deployment platform, or build the Docker image locally and push it.\n"
+                        f"{'='*60}"
+                    )
+        
         try:
             # Use mmap=True to save memory (requires new zipfile format)
-            checkpoint = torch.load(self.model_dir / 'model.pth', map_location=self.device, mmap=True, weights_only=False)
+            checkpoint = torch.load(model_path, map_location=self.device, mmap=True, weights_only=False)
         except (TypeError, RuntimeError):
             # Fallback for older torch versions or old-format .pth files
-            checkpoint = torch.load(self.model_dir / 'model.pth', map_location=self.device, weights_only=False)
-            
+            try:
+                checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
+            except Exception as e:
+                import pickle
+                if isinstance(e, pickle.UnpicklingError) and "invalid load key, 'v'" in str(e):
+                    raise RuntimeError("ERROR: model.pth is a Git LFS pointer. Please enable Git LFS on your deployment platform.") from e
+                raise
+                
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model.eval()
         
