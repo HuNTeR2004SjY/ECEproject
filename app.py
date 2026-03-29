@@ -171,6 +171,88 @@ def init_db_schema():
         conn = sqlite3.connect(config.DATABASE_PATH)
         cursor = conn.cursor()
         
+        # Create core tables that are missing
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS companies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                domain TEXT,
+                email TEXT
+            );
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'employee',
+                email TEXT,
+                FOREIGN KEY (company_id) REFERENCES companies (id)
+            );
+            CREATE TABLE IF NOT EXISTS departments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                FOREIGN KEY (company_id) REFERENCES companies (id)
+            );
+            CREATE TABLE IF NOT EXISTS classified_tickets (
+                id TEXT PRIMARY KEY,
+                subject TEXT,
+                body TEXT,
+                pred_type TEXT,
+                pred_priority TEXT,
+                pred_queue TEXT,
+                timestamp DATETIME,
+                corrected BOOLEAN DEFAULT 0,
+                status TEXT,
+                user_id INTEGER,
+                human_agent TEXT,
+                user_slack_id TEXT,
+                resolution_notes TEXT,
+                resolved_at TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS learning_buffer (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject TEXT,
+                body TEXT,
+                answer TEXT,
+                type TEXT,
+                priority TEXT,
+                queue TEXT
+            );
+            CREATE TABLE IF NOT EXISTS ticket_interactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                message TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (ticket_id) REFERENCES classified_tickets(id)
+            );
+        """)
+        
+        # Seed default data if empty (useful for fresh deployments)
+        cursor.execute("SELECT COUNT(*) FROM companies")
+        if cursor.fetchone()[0] == 0:
+            import hashlib
+            logger.info("Database is empty. Seeding default TechCorp data...")
+            cursor.execute("INSERT INTO companies (name, domain, email) VALUES (?, ?, ?)", 
+                           ('TechCorp', 'techcorp.com', 'admin@techcorp.com'))
+            tech_id = cursor.lastrowid
+            
+            pwd_hash = hashlib.sha256('admin123'.encode()).hexdigest()
+            cursor.execute("INSERT INTO users (company_id, username, password_hash, role, email) VALUES (?, ?, ?, ?, ?)",
+                           (tech_id, 'admin', pwd_hash, 'admin', 'admin@techcorp.com'))
+            
+            emp_hash = hashlib.sha256('user123'.encode()).hexdigest()
+            cursor.execute("INSERT INTO users (company_id, username, password_hash, role, email) VALUES (?, ?, ?, ?, ?)",
+                           (tech_id, 'emp001', emp_hash, 'employee', 'employee@techcorp.com'))
+            
+            depts = [('IT', 'it-support@techcorp.com'), ('HR', 'hr@techcorp.com')]
+            for name, email in depts:
+                cursor.execute("INSERT INTO departments (company_id, name, email) VALUES (?, ?, ?)", (tech_id, name, email))
+            conn.commit()
+            
+
         # Add columns if not exist
         try:
             cursor.execute("ALTER TABLE classified_tickets ADD COLUMN human_agent TEXT")
