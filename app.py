@@ -2222,6 +2222,9 @@ def complete_ticket(ticket_id):
         logger.error(f"Error completing ticket {ticket_id}: {e}")
         return jsonify({'error': str(e)}), 500
 
+# Ensure database schema is initialized even when running under WSGI (like Gunicorn)
+init_db_schema()
+
 if __name__ == '__main__':
     print("\n" + "=" * 50)
     print("Starting ECE Agent Web Application...")
