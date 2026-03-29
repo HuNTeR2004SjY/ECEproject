@@ -211,9 +211,13 @@ class User(UserMixin):
                 VALUES (?, ?, ?, ?, ?)
             """, (company_id, username, password_hash, role, email))
             conn.commit()
-            return True
-        except sqlite3.IntegrityError:
-            return False
+            return True, "User created successfully."
+        except sqlite3.IntegrityError as e:
+            if "username" in str(e).lower():
+                return False, "Username already exists."
+            return False, f"Database integrity error: {str(e)}"
+        except Exception as e:
+            return False, f"Database error: {str(e)}"
         finally:
             conn.close()
 

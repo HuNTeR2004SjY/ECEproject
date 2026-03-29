@@ -559,11 +559,11 @@ def bulk_create_users():
                 failed += 1
                 continue
 
-            ok = User.create_user(current_user.company_id, uname, pwd, email, role='employee')
+            ok, msg = User.create_user(current_user.company_id, uname, pwd, email, role='employee')
             if ok:
                 created += 1
             else:
-                errors.append(f'Row {i} ({uname}): username already exists.')
+                errors.append(f'Row {i} ({uname}): {msg}')
                 failed += 1
 
         audit_log('BULK_USER_UPLOAD', None, str(current_user.id),
@@ -795,11 +795,11 @@ def admin_users():
         if not username or not password or not email:
             return jsonify({'error': 'Missing required fields'}), 400
             
-        success = User.create_user(current_user.company_id, username, password, email)
+        success, msg = User.create_user(current_user.company_id, username, password, email)
         if success:
-            return jsonify({'success': True, 'message': 'User created successfully'})
+            return jsonify({'success': True, 'message': msg})
         else:
-            return jsonify({'error': 'User creation failed. Username might exist.'}), 400
+            return jsonify({'error': msg}), 400
 
     if request.method == 'DELETE':
         user_id = request.args.get('id')
