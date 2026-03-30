@@ -360,3 +360,25 @@ SLACK = {
 #   SLACK_ESCALATION_CHANNEL=#support-escalations  (optional, has default)
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_CHANNEL   = os.getenv("SLACK_ESCALATION_CHANNEL", "#support-escalations")
+
+# ============================================================================
+# DATABASE CONCURRENCY PATCH
+# ============================================================================
+import sqlite3
+_original_connect = sqlite3.connect
+
+def _patched_connect(*args, **kwargs):
+    if 'timeout' not in kwargs:
+        kwargs['timeout'] = 15.0  # Increase busy timeout to 15 seconds
+    
+    conn = _original_connect(*args, **kwargs)
+    
+    # Try to enable WAL mode for better concurrency across threads
+    try:
+        conn.execute('PRAGMA journal_mode=WAL;')
+    except Exception:
+        pass
+        
+    return conn
+
+sqlite3.connect = _patched_connect
