@@ -223,12 +223,18 @@ def init_db_schema():
             CREATE TABLE IF NOT EXISTS ticket_interactions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ticket_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
+                sender TEXT NOT NULL,
                 message TEXT NOT NULL,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (ticket_id) REFERENCES classified_tickets(id)
             );
         """)
+        
+        # Migration: check and rename user_id to sender in ticket_interactions if it exists
+        cursor.execute("PRAGMA table_info(ticket_interactions)")
+        cols = [c[1] for c in cursor.fetchall()]
+        if 'user_id' in cols and 'sender' not in cols:
+            cursor.execute("ALTER TABLE ticket_interactions RENAME COLUMN user_id TO sender")
         
         # Seed default data if empty (useful for fresh deployments)
         cursor.execute("SELECT COUNT(*) FROM companies")
@@ -1085,6 +1091,7 @@ def predict():
         # ── Jira Integration ────────────────────────────────────────────
         jira_key = None
         try:
+            jira_client = get_jira()
             jira_key = jira_client.create_issue(
                 ticket_id   = ticket_id,
                 subject     = subject,
@@ -1371,6 +1378,7 @@ def predict_stream():
             # ── Jira Integration for Stream ──────────────────────────────────
             jira_key = None
             try:
+                jira_client = get_jira()
                 jira_key = jira_client.create_issue(
                     ticket_id   = ticket_id,
                     subject     = subject,
@@ -1672,6 +1680,7 @@ def validate_solution():
             # ── Update Jira ─────────────────────────────────────────────────────
             # Since this is a manual resolution from the frontend, we update the ticket in Jira
             try:
+                jira_client = get_jira()
                 # Find Jira key
                 jira_key = get_jira_key(config.DATABASE_PATH, ticket_id)
                 if jira_key:
@@ -2171,6 +2180,7 @@ def complete_ticket(ticket_id):
                 
         # ── Jira sync: mark Done ─────────────────────────────────────────
         try:
+            jira_client = get_jira()
             jira_key = get_jira_key(config.DATABASE_PATH, ticket_id)
             if jira_key:
                 jira_client.update_issue_resolved(

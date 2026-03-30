@@ -1438,3 +1438,212 @@ body::before {
     background: rgba(255, 255, 255, 0.1);
     border-radius: 3px;
 }
+
+/* ========================================
+   RESPONSIVE DATA TABLES
+   ======================================== */
+
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 15px;
+}
+
+.table-responsive::-webkit-scrollbar {
+    height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.3);
+    border-radius: 4px;
+}
+
+/* ========================================
+   MOBILE UI OPTIMIZATIONS (< 768px)
+   ======================================== */
+
+@media (max-width: 768px) {
+    /* 1. Global Spacing & Layout */
+    .dashboard-main {
+        padding: 15px !important;
+        margin-left: 0 !important;
+    }
+    
+    .container {
+        padding: 12px;
+    }
+    
+    .badge {
+        white-space: nowrap;
+    }
+
+    /* 2. Top Navigation Bar */
+    .navbar {
+        padding: 12px 15px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .navbar-left {
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .navbar h2 {
+        font-size: 1.1rem;
+        margin-right: auto;
+    }
+    
+    .navbar-nav {
+        width: 100%;
+        margin-left: 0;
+        padding-left: 0;
+        border-left: none;
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 5px;
+        justify-content: flex-start;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Hide scrollbar for nav but keep swipable */
+    .navbar-nav::-webkit-scrollbar {
+        height: 0px;
+    }
+    
+    .nav-item {
+        font-size: 0.85rem;
+        padding: 6px 12px;
+    }
+
+    .navbar-right {
+        width: 100%;
+        justify-content: space-between;
+        gap: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        padding-top: 12px;
+    }
+
+    .user-profile span {
+        font-size: 0.8rem;
+    }
+
+    .cta-button {
+        padding: 8px 16px;
+        font-size: 0.85rem;
+    }
+
+    /* 3. Grids & Cards */
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    
+    .results-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .stat-card {
+        padding: 16px;
+    }
+
+    .recent-activity {
+        padding: 15px;
+    }
+
+    .section-header h2 {
+        font-size: 1.25rem;
+    }
+
+    /* 4. Forms */
+    .ticket-form-section {
+        padding: 15px;
+    }
+
+    .form-group input, 
+    .form-group textarea {
+        padding: 12px;
+        font-size: 0.95rem;
+    }
+
+    .submit-btn {
+        width: 100%;
+        padding: 14px;
+    }
+
+    /* 5. Modals */
+    .modal-content.ticket-details-modal {
+        width: 95%;
+        margin: 5% auto;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .modal-body {
+        padding: 15px;
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .chat-interface {
+        height: 50vh; /* Adjust for smaller screens */
+    }
+
+    .chat-input-area {
+        width: 100%;
+        bottom: 10px;
+        padding: 6px 6px 6px 15px;
+    }
+    
+    .summary-item {
+        flex-direction: column;
+        gap: 2px;
+    }
+    
+    .info-row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 8px;
+    }
+    
+    .status-badge {
+        align-self: flex-start;
+    }
+
+    /* 6. Admin Filter Controls */
+    .filter-controls {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .filter-chips-row {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 8px;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .filter-chips-row::-webkit-scrollbar {
+        height: 0px;
+    }
+}
+
+/* Very Small Devices */
+@media (max-width: 480px) {
+    .logo-text h1 {
+        font-size: 1.5rem;
+    }
+    
+    .stat-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 1.25rem;
+    }
+}

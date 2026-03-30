@@ -25,7 +25,7 @@ def handle_action(client: SocketModeClient, req: SocketModeRequest):
     if not ticket_id:
         return
 
-    from app import jira_client, slack, audit_log
+    from app import get_jira, slack, audit_log
     from src.jira_integration import get_jira_key
 
     try:
@@ -44,6 +44,7 @@ def handle_action(client: SocketModeClient, req: SocketModeRequest):
 
             jira_key = get_jira_key(config.DATABASE_PATH, ticket_id)
             if jira_key:
+                jira_client = get_jira()
                 jira_client.update_issue_resolved(
                     jira_key=jira_key,
                     solution="Resolved by user confirmation via Slack DM.",
@@ -70,6 +71,7 @@ def handle_action(client: SocketModeClient, req: SocketModeRequest):
 
             jira_key = get_jira_key(config.DATABASE_PATH, ticket_id)
             if jira_key:
+                jira_client = get_jira()
                 jira_client.update_issue_escalated(
                     jira_key=jira_key,
                     ticket_id=ticket_id,
