@@ -83,3 +83,5 @@ config/
 config.yaml
 config.json
 .env
+
+*.bak
