@@ -241,22 +241,25 @@ def init_db_schema():
         if cursor.fetchone()[0] == 0:
             import hashlib
             logger.info("Database is empty. Seeding default TechCorp data...")
-            cursor.execute("INSERT INTO companies (name, domain, email) VALUES (?, ?, ?)", 
-                           ('TechCorp', 'techcorp.com', 'admin@techcorp.com'))
-            tech_id = cursor.lastrowid
-            
-            pwd_hash = hashlib.sha256('admin123'.encode()).hexdigest()
-            cursor.execute("INSERT INTO users (company_id, username, password_hash, role, email) VALUES (?, ?, ?, ?, ?)",
-                           (tech_id, 'admin', pwd_hash, 'admin', 'admin@techcorp.com'))
-            
-            emp_hash = hashlib.sha256('user123'.encode()).hexdigest()
-            cursor.execute("INSERT INTO users (company_id, username, password_hash, role, email) VALUES (?, ?, ?, ?, ?)",
-                           (tech_id, 'emp001', emp_hash, 'employee', 'employee@techcorp.com'))
-            
-            depts = [('IT', 'it-support@techcorp.com'), ('HR', 'hr@techcorp.com')]
-            for name, email in depts:
-                cursor.execute("INSERT INTO departments (company_id, name, email) VALUES (?, ?, ?)", (tech_id, name, email))
-            conn.commit()
+            try:
+                cursor.execute("INSERT INTO companies (name, domain, email) VALUES (?, ?, ?)", 
+                               ('TechCorp', 'techcorp.com', 'admin@techcorp.com'))
+                tech_id = cursor.lastrowid
+                
+                pwd_hash = hashlib.sha256('admin123'.encode()).hexdigest()
+                cursor.execute("INSERT INTO users (company_id, username, password_hash, role, email) VALUES (?, ?, ?, ?, ?)",
+                               (tech_id, 'admin', pwd_hash, 'admin', 'admin@techcorp.com'))
+                
+                emp_hash = hashlib.sha256('user123'.encode()).hexdigest()
+                cursor.execute("INSERT INTO users (company_id, username, password_hash, role, email) VALUES (?, ?, ?, ?, ?)",
+                               (tech_id, 'emp001', emp_hash, 'employee', 'employee@techcorp.com'))
+                
+                depts = [('IT', 'it-support@techcorp.com'), ('HR', 'hr@techcorp.com')]
+                for name, email in depts:
+                    cursor.execute("INSERT INTO departments (company_id, name, email) VALUES (?, ?, ?)", (tech_id, name, email))
+                conn.commit()
+            except sqlite3.IntegrityError:
+                logger.warning("Seed data already exists, skipping.")
             
 
         # Add columns if not exist
@@ -336,6 +339,12 @@ def init_db_schema():
         logger.info("Database schema migrations completed.")
     except Exception as e:
         logger.error(f"Failed to initialize database schema: {e}")
+    finally:
+        if 'conn' in locals():
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 def auto_close_tickets():
     try:
