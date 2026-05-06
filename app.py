@@ -1012,20 +1012,6 @@ def predict():
                 if automation_specialist is None:
                         init_solver()
                 
-                # Append confirmation links
-                if not result.get('escalated') and result.get('solution'):
-                    base_url = request.host_url.rstrip('/')
-                    confirm_yes = f"{base_url}/ticket/confirm/{ticket_id}?response=yes"
-                    confirm_no = f"{base_url}/ticket/confirm/{ticket_id}?response=no"
-                    
-                    confirmation_block = f"""
-<br><hr><br>
-<b>Did this resolve your issue?</b><br>
-✅ Yes, close my ticket: <a href="{confirm_yes}">{confirm_yes}</a><br>
-❌ No, I still need help: <a href="{confirm_no}">{confirm_no}</a>
-"""
-                    result['solution'] += confirmation_block
-                
                 # Call unified notification
                 automation_specialist.notify_ticket_resolution(
                     ticket_data=ticket_data,
@@ -1362,19 +1348,6 @@ def predict_stream():
                         'type': result['triage']['type'], 'priority': result['triage']['priority'],
                         'user_id': user_id_str, 'company_id': user_company_id, 'status': status
                     }
-                    # Append confirmation links for email
-                    if not result.get('escalated') and result.get('solution'):
-                        base_url = request.host_url.rstrip('/')
-                        confirm_yes = f"{base_url}/ticket/confirm/{ticket_id}?response=yes"
-                        confirm_no = f"{base_url}/ticket/confirm/{ticket_id}?response=no"
-                        confirmation_block = f"""
-<br><hr><br>
-<b>Did this resolve your issue?</b><br>
-✅ Yes, close my ticket: <a href="{confirm_yes}">{confirm_yes}</a><br>
-❌ No, I still need help: <a href="{confirm_no}">{confirm_no}</a>
-"""
-                        result['solution'] += confirmation_block
-
                     automation_specialist.notify_ticket_resolution(
                         ticket_data=ticket_data, result=result, user_email=user_email
                     )

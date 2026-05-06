@@ -473,13 +473,23 @@ class NotificationManager:
                 
                 <div class="content">
                     {ai_body if ai_body else f"<p>{notification['message']}</p>"}
-                    
                     <div class="ticket-info">
                         <p><strong>Ticket ID:</strong> {ticket['id']}</p>
                         <p><strong>Subject:</strong> {ticket.get('subject', 'N/A')}</p>
                         <p><strong>Status:</strong> {ticket.get('status', 'unknown')}</p>
                         <p><strong>Priority:</strong> {ticket.get('priority', 'normal')}</p>
                     </div>
+                    
+                    {f'''
+                    <div style="margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 15px;">
+                        <b>Did this resolve your issue?</b><br>
+                        ✅ Yes, close my ticket: <a href="https://ece.edith.eu.org/ticket/confirm/{ticket['id']}?response=yes">Click here to confirm resolution</a><br>
+                        ❌ No, I still need help: <a href="https://ece.edith.eu.org/ticket/confirm/{ticket['id']}?response=no">Click here to keep open</a>
+                    </div>
+                    ''' if ticket.get('status') not in ['escalated', 'closed'] else ''}
+                </div>
+                
+                <div class="footer">
 
                     <!-- RESOLUTION DETAILS SECTION -->
                     <div style="background: #eef2ff; padding: 15px; border-radius: 6px; margin: 15px 0; border: 1px solid #c7d2fe;">
