@@ -700,9 +700,17 @@ def test_integration():
             if not cfg.get('enabled'):
                 return jsonify({'success': False, 'message': 'Email is disabled.'})
             ctx = _ssl.create_default_context()
-            with smtplib.SMTP_SSL(cfg['smtp_host'], 465, context=ctx, timeout=8) as s:
-                s.login(cfg['smtp_user'], cfg['smtp_password'])
-            return jsonify({'success': True, 'message': f'SMTP connection OK ({cfg["smtp_host"]})'})
+            port = int(cfg.get('smtp_port', 587))
+            if port == 465:
+                with smtplib.SMTP_SSL(cfg['smtp_host'], 465, context=ctx, timeout=8) as s:
+                    s.login(cfg['smtp_user'], cfg['smtp_password'])
+            else:
+                with smtplib.SMTP(cfg['smtp_host'], port, timeout=8) as s:
+                    s.ehlo()
+                    s.starttls(context=ctx)
+                    s.ehlo()
+                    s.login(cfg['smtp_user'], cfg['smtp_password'])
+            return jsonify({'success': True, 'message': f'SMTP connection OK ({cfg["smtp_host"]}:{port})'})
         except Exception as e:
             return jsonify({'success': False, 'message': str(e)})
 
